@@ -26,6 +26,7 @@ struct VertexInputAttribute
     uint32_t location;
     VkFormat format;
     uint32_t offset;
+    std::string name;
 };
 
 struct VertexInputBinding
@@ -38,22 +39,19 @@ struct VertexInputBinding
 class VulkanShaderReflection
 {
 public:
-    VulkanShaderReflection(const std::vector<uint32_t> &spirvCode, VkShaderStageFlagBits stage);
+    VulkanShaderReflection(const std::vector<uint32_t>& spirvCode, VkShaderStageFlagBits stage);
 
     const std::vector<ShaderResource>& GetResources() const { return m_Resources; }
-    const std::vector<PushConstantRange> &GetPushConstantRanges() const { return m_PushConstantRanges; }
+    const std::vector<PushConstantRange>& GetPushConstantRanges() const { return m_PushConstantRanges; }
     VkShaderStageFlags GetShaderStage() const { return m_ShaderStage; }
 
-
-    static VkDescriptorType SPIRTypeToVkDescriptorType(const spirv_cross::SPIRType &type, bool isWritable);
     static VkFormat SPIRTypeToVkFormat(const spirv_cross::SPIRType &type);
+    static uint32_t GetFormatSize(VkFormat format);
 
 private:
     void ReflectVertexInputs(const spirv_cross::Compiler &compiler);
-    void ReflectDescriptorSets(const spirv_cross::Compiler &compiler);
-    void ReflectResources(const spirv_cross::Compiler &compiler);
     void ReflectPushConstants(const spirv_cross::Compiler &compiler);
-
+    void ReflectResources(const spirv_cross::Compiler &compiler);
 
     std::vector<ShaderResource> m_Resources;
     std::vector<PushConstantRange> m_PushConstantRanges;

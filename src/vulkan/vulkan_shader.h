@@ -18,21 +18,21 @@ class VulkanShader
 public:
     VulkanShader(std::string filePath, ShaderType type);
     ~VulkanShader();
-    void Load();
 
-    const VulkanShaderReflection &GetReflection() const { return m_Reflection; }
+    VulkanShaderReflection& GetReflection() const { return *m_Reflection; }
     VkShaderModule GetShaderModule() const { return m_ShaderModule; }
     VkShaderStageFlagBits GetShaderStage() const;
+
 private:
+    void Load();
+    std::vector<uint32_t> Compile();
+    void CreateShaderModule(const std::vector<uint32_t>& code);
 
-    VulkanShaderReflection m_Reflection;
-    void PerformReflection();
-
+private:
     std::string m_FilePath;
     ShaderType m_Type;
     VkShaderModule m_ShaderModule = VK_NULL_HANDLE;
-    std::vector<char> m_ShaderCode;
+    std::string m_ShaderSource;
 
-    void CreateShaderModule();
-    std::vector<char> ReadFile(const std::string &filename);
+    std::shared_ptr<VulkanShaderReflection> m_Reflection;
 };

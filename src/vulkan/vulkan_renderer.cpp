@@ -1,4 +1,5 @@
 #include "vulkan_renderer.h"
+#include <memory>
 
 VulkanRenderer::VulkanRenderer(Window &window)
     : m_WindowRef(window)
@@ -10,6 +11,11 @@ VulkanRenderer::VulkanRenderer(Window &window)
                     OnSwapchainRecreate(width, height);
                 });
     m_DeferredRenderer = std::make_unique<VulkanDeferredRenderer>(this);
+}
+
+VulkanRenderer::~VulkanRenderer()
+{
+
 }
 
 void VulkanRenderer::Initialize()
@@ -29,7 +35,7 @@ void VulkanRenderer::Render()
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         vkBeginCommandBuffer(cmd, &beginInfo);
 
-        m_DeferredRenderer->Render(cmd);
+        m_DeferredRenderer->Render(cmd, m_FrameIndex, m_SwapchainRenderer->CurrentImageIndex());
 
         vkEndCommandBuffer(cmd);
 
@@ -43,3 +49,4 @@ void VulkanRenderer::OnSwapchainRecreate(uint32_t width, uint32_t height)
 {
     m_DeferredRenderer->Resize(width, height);
 }
+

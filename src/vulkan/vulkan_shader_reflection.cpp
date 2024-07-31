@@ -7,42 +7,14 @@ VulkanShaderReflection::VulkanShaderReflection(const std::vector <uint32_t>& spi
     ReflectResources(compiler);
     ReflectPushConstants(compiler);
     ReflectVertexInputs(compiler);
-    ReflectDescriptorSets(compiler);
 }
 
-void VulkanShaderReflection::ReflectVertexInputs(const spirv_cross::Compiler &compiler)
-{
-    spirv_cross::ShaderResources resources = compiler.get_shader_resources();
-
-    for (const auto &resource: resources.stage_inputs)
-    {
-        uint32_t location = compiler.get_decoration(resource.id, spv::DecorationLocation);
-        const auto &type = compiler.get_type(resource.type_id);
-
-        VertexInputAttribute attribute{};
-        attribute.location = location;
-        attribute.format = SPIRTypeToVkFormat(type);
-        attribute.offset = 0;  // This will need to be calculated based on your vertex structure
-        m_VertexInputAttributes.push_back(attribute);
-    }
-
-    // You may need to adjust this part based on your vertex input binding strategy
-    if (!m_VertexInputAttributes.empty())
-    {
-        VertexInputBinding binding;
-        binding.binding = 0;
-        binding.stride = 0;  // This will need to be calculated based on your vertex structure
-        binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-        m_VertexInputBindings.push_back(binding);
-    }
-}
-
-void VulkanShaderReflection::ReflectResources(const spirv_cross::Compiler &compiler)
+void VulkanShaderReflection::ReflectResources(const spirv_cross::Compiler& compiler)
 {
     spirv_cross::ShaderResources resources = compiler.get_shader_resources();
 
     auto reflectBinding =
-    [&](const spirv_cross::Resource &resource, VkDescriptorType descriptorType)
+            [&](const spirv_cross::Resource& resource, VkDescriptorType descriptorType)
     {
         ShaderResource shaderResource;
         shaderResource.name = resource.name;
@@ -51,23 +23,67 @@ void VulkanShaderReflection::ReflectResources(const spirv_cross::Compiler &compi
         shaderResource.descriptorType = descriptorType;
         shaderResource.stageFlags = m_ShaderStage;
 
-        const spirv_cross::SPIRType &type = compiler.get_type(resource.type_id);
+        const spirv_cross::SPIRType& type = compiler.get_type(resource.type_id);
         shaderResource.arraySize = type.array.empty() ? 1 : type.array[0];
 
         m_Resources.push_back(shaderResource);
+
+        // Create and add the corresponding VkDescriptorSetLayoutBinding
+        VkDescriptorSetLayoutBinding layoutBinding{};
+        layoutBinding.binding = shaderResource.binding;
+        layoutBinding.descriptorType = descriptorType;
+        layoutBinding.descriptorCount = shaderResource.arraySize;
+        layoutBinding.stageFlags = m_ShaderStage;
+
+        m_DescriptorSetLayoutBindings.push_back(layoutBinding);
     };
 
-    for (const auto &resource: resources.uniform_buffers)
+    for (const auto& resource : resources.uniform_buffers)
         reflectBinding(resource, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
-    for (const auto &resource: resources.storage_buffers)
+    for (const auto& resource : resources.storage_buffers)
         reflectBinding(resource, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 
-    for (const auto &resource: resources.sampled_images)
+    for (const auto& resource : resources.sampled_images)
         reflectBinding(resource, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-    for (const auto &resource: resources.storage_images)
+    for (const auto& resource : resources.storage_images)
         reflectBinding(resource, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+
+    for (const auto& resource : resources.separate_samplers)
+        reflectBinding(resource, VK_DESCRIPTOR_TYPE_SAMPLER);
+
+    for (const auto& resource : resources.separate_images)
+        reflectBinding(resource, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+}
+
+void VulkanShaderReflection::ReflectVertexInputs(const spirv_cross::Compiler &compiler)
+{
+    spirv_cross::ShaderResources resources = compiler.get_shader_resources();
+
+    VertexInputBinding binding{};
+    binding.binding = 0;
+    binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    binding.stride = 0;  // We'll calculate this
+
+    for (const auto& resource : resources.stage_inputs)
+    {
+        uint32_t location = compiler.get_decoration(resource.id, spv::DecorationLocation);
+        const auto& type = compiler.get_type(resource.type_id);
+
+        VertexInputAttribute attribute;
+        attribute.location = location;
+        attribute.format = SPIRTypeToVkFormat(type);
+        attribute.offset = binding.stride;  // Current stride is the offset for this attribute
+        attribute.name = resource.name;
+
+        m_VertexInputAttributes.push_back(attribute);
+
+        // Update the stride
+        binding.stride += GetFormatSize(attribute.format);
+    }
+
+    m_VertexInputBindings.push_back(binding);
 }
 
 void VulkanShaderReflection::ReflectPushConstants(const spirv_cross::Compiler &compiler)
@@ -91,33 +107,188 @@ void VulkanShaderReflection::ReflectPushConstants(const spirv_cross::Compiler &c
     }
 }
 
-VkDescriptorType VulkanShaderReflection::SPIRTypeToVkDescriptorType(const spirv_cross::SPIRType &type, bool isWritable)
-{
-    if (type.basetype == spirv_cross::SPIRType::SampledImage)
-        return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    else if (type.basetype == spirv_cross::SPIRType::Image)
-        return isWritable ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    else if (type.basetype == spirv_cross::SPIRType::Sampler)
-        return VK_DESCRIPTOR_TYPE_SAMPLER;
-    else if (type.basetype == spirv_cross::SPIRType::Struct)
-        return isWritable ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-
-    // Add more types as needed...
-
-    return VK_DESCRIPTOR_TYPE_MAX_ENUM;
-}
-
 VkFormat VulkanShaderReflection::SPIRTypeToVkFormat(const spirv_cross::SPIRType &type)
 {
-    // Implement this based on the SPIR-V type
-    // For example:
-    if (type.basetype == spirv_cross::SPIRType::Float)
+    switch (type.basetype)
     {
-        if (type.vecsize == 1) return VK_FORMAT_R32_SFLOAT;
-        if (type.vecsize == 2) return VK_FORMAT_R32G32_SFLOAT;
-        if (type.vecsize == 3) return VK_FORMAT_R32G32B32_SFLOAT;
-        if (type.vecsize == 4) return VK_FORMAT_R32G32B32A32_SFLOAT;
+        case spirv_cross::SPIRType::Float:
+            switch (type.vecsize)
+            {
+                case 1: return VK_FORMAT_R32_SFLOAT;
+                case 2: return VK_FORMAT_R32G32_SFLOAT;
+                case 3: return VK_FORMAT_R32G32B32_SFLOAT;
+                case 4: return VK_FORMAT_R32G32B32A32_SFLOAT;
+            }
+            break;
+        case spirv_cross::SPIRType::Int:
+            switch (type.vecsize)
+            {
+                case 1: return VK_FORMAT_R32_SINT;
+                case 2: return VK_FORMAT_R32G32_SINT;
+                case 3: return VK_FORMAT_R32G32B32_SINT;
+                case 4: return VK_FORMAT_R32G32B32A32_SINT;
+            }
+            break;
+        case spirv_cross::SPIRType::UInt:
+            switch (type.vecsize)
+            {
+                case 1: return VK_FORMAT_R32_UINT;
+                case 2: return VK_FORMAT_R32G32_UINT;
+                case 3: return VK_FORMAT_R32G32B32_UINT;
+                case 4: return VK_FORMAT_R32G32B32A32_UINT;
+            }
+            break;
+        case spirv_cross::SPIRType::Half:
+            switch (type.vecsize)
+            {
+                case 1: return VK_FORMAT_R16_SFLOAT;
+                case 2: return VK_FORMAT_R16G16_SFLOAT;
+                case 3: return VK_FORMAT_R16G16B16_SFLOAT;
+                case 4: return VK_FORMAT_R16G16B16A16_SFLOAT;
+            }
+            break;
+        case spirv_cross::SPIRType::Short:
+            switch (type.vecsize)
+            {
+                case 1: return VK_FORMAT_R16_SINT;
+                case 2: return VK_FORMAT_R16G16_SINT;
+                case 3: return VK_FORMAT_R16G16B16_SINT;
+                case 4: return VK_FORMAT_R16G16B16A16_SINT;
+            }
+            break;
+        case spirv_cross::SPIRType::UShort:
+            switch (type.vecsize)
+            {
+                case 1: return VK_FORMAT_R16_UINT;
+                case 2: return VK_FORMAT_R16G16_UINT;
+                case 3: return VK_FORMAT_R16G16B16_UINT;
+                case 4: return VK_FORMAT_R16G16B16A16_UINT;
+            }
+            break;
+        case spirv_cross::SPIRType::Double:
+            switch (type.vecsize)
+            {
+                case 1: return VK_FORMAT_R64_SFLOAT;
+                case 2: return VK_FORMAT_R64G64_SFLOAT;
+                case 3: return VK_FORMAT_R64G64B64_SFLOAT;
+                case 4: return VK_FORMAT_R64G64B64A64_SFLOAT;
+            }
+            break;
+        case spirv_cross::SPIRType::Unknown:
+        case spirv_cross::SPIRType::Void:
+            return VK_FORMAT_UNDEFINED;
+        case spirv_cross::SPIRType::Boolean:
+            return VK_FORMAT_R8_UINT;  // Booleans are typically 1 byte
+        case spirv_cross::SPIRType::SByte:
+            return VK_FORMAT_R8_SINT;
+        case spirv_cross::SPIRType::UByte:
+            return VK_FORMAT_R8_UINT;
+        case spirv_cross::SPIRType::Int64:
+            switch (type.vecsize)
+            {
+                case 1: return VK_FORMAT_R64_SINT;
+                case 2: return VK_FORMAT_R64G64_SINT;
+                case 3: return VK_FORMAT_R64G64B64_SINT;
+                case 4: return VK_FORMAT_R64G64B64A64_SINT;
+            }
+            break;
+        case spirv_cross::SPIRType::UInt64:
+            switch (type.vecsize)
+            {
+                case 1: return VK_FORMAT_R64_UINT;
+                case 2: return VK_FORMAT_R64G64_UINT;
+                case 3: return VK_FORMAT_R64G64B64_UINT;
+                case 4: return VK_FORMAT_R64G64B64A64_UINT;
+            }
+            break;
+        case spirv_cross::SPIRType::AtomicCounter:
+            return VK_FORMAT_R32_UINT;  // Atomic counters are typically 32-bit
+
+        case spirv_cross::SPIRType::Struct:
+            return VK_FORMAT_UNDEFINED;  // Structs don't have a specific format
+
+        case spirv_cross::SPIRType::Image:
+        case spirv_cross::SPIRType::SampledImage:
+        case spirv_cross::SPIRType::Sampler:
+            return VK_FORMAT_UNDEFINED;  // These types don't have a specific format
+
+        case spirv_cross::SPIRType::AccelerationStructure:
+        case spirv_cross::SPIRType::RayQuery:
+            return VK_FORMAT_UNDEFINED;  // Ray tracing types don't have a specific format
+
+        case spirv_cross::SPIRType::ControlPointArray:
+        case spirv_cross::SPIRType::Interpolant:
+            return VK_FORMAT_UNDEFINED;  // These types don't have a direct Vulkan format
+
+        case spirv_cross::SPIRType::Char:
+            return VK_FORMAT_R8_SINT;
+        default:
+            return VK_FORMAT_UNDEFINED;
     }
-    // Add more type conversions as needed
     return VK_FORMAT_UNDEFINED;
 }
+
+uint32_t VulkanShaderReflection::GetFormatSize(VkFormat format)
+{
+    switch (format)
+    {
+        case VK_FORMAT_R32_SFLOAT:
+        case VK_FORMAT_R32_SINT:
+        case VK_FORMAT_R32_UINT:
+            return 4;
+        case VK_FORMAT_R32G32_SFLOAT:
+        case VK_FORMAT_R32G32_SINT:
+        case VK_FORMAT_R32G32_UINT:
+            return 8;
+        case VK_FORMAT_R32G32B32_SFLOAT:
+        case VK_FORMAT_R32G32B32_SINT:
+        case VK_FORMAT_R32G32B32_UINT:
+            return 12;
+        case VK_FORMAT_R32G32B32A32_SFLOAT:
+        case VK_FORMAT_R32G32B32A32_SINT:
+        case VK_FORMAT_R32G32B32A32_UINT:
+            return 16;
+        case VK_FORMAT_R16_SFLOAT:
+        case VK_FORMAT_R16_SINT:
+        case VK_FORMAT_R16_UINT:
+            return 2;
+        case VK_FORMAT_R16G16_SFLOAT:
+        case VK_FORMAT_R16G16_SINT:
+        case VK_FORMAT_R16G16_UINT:
+            return 4;
+        case VK_FORMAT_R16G16B16_SFLOAT:
+        case VK_FORMAT_R16G16B16_SINT:
+        case VK_FORMAT_R16G16B16_UINT:
+            return 6;
+        case VK_FORMAT_R16G16B16A16_SFLOAT:
+        case VK_FORMAT_R16G16B16A16_SINT:
+        case VK_FORMAT_R16G16B16A16_UINT:
+            return 8;
+        case VK_FORMAT_R64_SFLOAT:
+            return 8;
+        case VK_FORMAT_R64G64_SFLOAT:
+            return 16;
+        case VK_FORMAT_R64G64B64_SFLOAT:
+            return 24;
+        case VK_FORMAT_R64G64B64A64_SFLOAT:
+            return 32;
+        case VK_FORMAT_R8_UINT:
+        case VK_FORMAT_R8_SINT:
+            return 1;
+        case VK_FORMAT_R64_SINT:
+        case VK_FORMAT_R64_UINT:
+            return 8;
+        case VK_FORMAT_R64G64_SINT:
+        case VK_FORMAT_R64G64_UINT:
+            return 16;
+        case VK_FORMAT_R64G64B64_SINT:
+        case VK_FORMAT_R64G64B64_UINT:
+            return 24;
+        case VK_FORMAT_R64G64B64A64_SINT:
+        case VK_FORMAT_R64G64B64A64_UINT:
+            return 32;
+        default:
+            return 0; // Unknown format
+    }
+}
+

@@ -1,5 +1,5 @@
-#include(./.env.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
-#message(STATUS "Local .env.cmake: ${LOCAL_ENV}")
+include(./.env.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
+message(STATUS "Local .env.cmake: ${LOCAL_ENV}")
 
 cmake_minimum_required(VERSION 3.11.0)
 set(NAME coo)
@@ -79,7 +79,11 @@ add_executable(${PROJECT_NAME}
         src/vulkan/vulkan_framebuffer.cpp
         src/vulkan/vulkan_graphics_pipeline.cpp
         src/vulkan/vulkan_shader.cpp
-        src/vulkan/vulkan_shader_reflection.cpp)
+        src/vulkan/vulkan_shader_reflection.cpp
+        src/vulkan/vulkan_buffer.cpp
+        src/vulkan/vulkan_model.cpp
+        src/vulkan/vulkan_material.cpp
+        src/vulkan/vulkan_descriptors.cpp)
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/build")

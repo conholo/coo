@@ -1,10 +1,12 @@
 #pragma once
 
-#include "vulkan_device.h"
+#include <vulkan/vulkan.h>
+#include <vector>
+#include "vulkan_buffer.h"
+
 #include <memory>
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <vulkan_buffer.h>
 #include <glm/glm.hpp>
 
 class Model
@@ -40,16 +42,16 @@ public:
         void LoadModel(const std::string& filePath);
 
     private:
-        void ComputeTangentBasis(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
+        static void ComputeTangentBasis(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
     };
 
-    Model(VulkanDevice& deviceRef, const Builder& builder);
-    ~Model();
+    explicit Model(const Builder& builder);
+    ~Model() = default;
 
     Model(const Model &) = delete;
     Model& operator=(const Model &) = delete;
 
-    static std::shared_ptr<Model> CreateModelFromFile(VulkanDevice& deviceRef, const std::string& filePath);
+    static std::shared_ptr<Model> CreateModelFromFile(const std::string& filePath);
     void Bind(VkCommandBuffer commandBuffer);
     void Draw(VkCommandBuffer commandBuffer) const;
 
@@ -58,8 +60,6 @@ private:
     void CreateIndexBuffer(const std::vector<uint32_t>& indices);
 
 private:
-    VulkanDevice& m_DeviceRef;
-
     std::unique_ptr<VulkanBuffer> m_VertexBuffer;
     uint32_t m_VertexCount{};
 

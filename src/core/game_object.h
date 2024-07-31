@@ -1,6 +1,6 @@
 #pragma once
 
-#include "model.h"
+#include "vulkan/vulkan_model.h"
 #include <memory>
 #include <unordered_map>
 #include <vulkan_swapchain.h>

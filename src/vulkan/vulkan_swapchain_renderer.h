@@ -22,6 +22,8 @@ public:
 
     VkCommandBuffer BeginFrame(uint32_t frameIndex);
     void EndFrame(uint32_t frameIndex);
+    uint32_t CurrentImageIndex() const { return m_CurrentImageIndex; }
+
 private:
 
     void CreateDrawCommandBuffers();

@@ -1,11 +1,11 @@
-#include "model.h"
-
-#include "engine_utils.h"
+#include "vulkan_model.h"
+#include "core/engine_utils.h"
+#include "vulkan_buffer.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
+#include "tiny_obj_loader.h"
+
 #define GLM_ENABLE_EXPERIMENTAL
-#include <vulkan_buffer.h>
 #include <glm/gtx/hash.hpp>
 
 namespace std
@@ -126,21 +126,19 @@ void Model::Builder::ComputeTangentBasis(std::vector<Vertex>& vertices, const st
     }
 }
 
-Model::Model(VulkanDevice& deviceRef, const Builder& builder)
-    :m_DeviceRef(deviceRef)
+Model::Model(const Builder& builder)
 {
     CreateVertexBuffer(builder.Vertices);
     CreateIndexBuffer(builder.Indices);
 }
 
-std::shared_ptr<Model> Model::CreateModelFromFile(VulkanDevice &deviceRef, const std::string &filePath)
+std::shared_ptr<Model> Model::CreateModelFromFile(const std::string &filePath)
 {
     Builder builder{};
     builder.LoadModel(filePath);
-    return std::make_shared<Model>(deviceRef, builder);
+    return std::make_shared<Model>(builder);
 }
 
-Model::~Model() { }
 
 void Model::CreateVertexBuffer(const std::vector<Vertex> &vertices)
 {
@@ -152,7 +150,6 @@ void Model::CreateVertexBuffer(const std::vector<Vertex> &vertices)
     uint32_t vertexSize = sizeof(vertices[0]);
 
     VulkanBuffer stagingBuffer{
-        m_DeviceRef,
         vertexSize,
         m_VertexCount,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -163,17 +160,16 @@ void Model::CreateVertexBuffer(const std::vector<Vertex> &vertices)
     stagingBuffer.WriteToBuffer(vertices.data());
 
     m_VertexBuffer = std::make_unique<VulkanBuffer>(
-        m_DeviceRef,
         vertexSize,
         m_VertexCount,
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
         );
 
-    m_DeviceRef.CopyBuffer(
-               stagingBuffer.GetBuffer(),
-               m_VertexBuffer->GetBuffer(),
-               bufferSize);
+    VulkanBuffer::CopyBuffer(
+            stagingBuffer.GetBuffer(),
+            m_VertexBuffer->GetBuffer(),
+            bufferSize);
 }
 
 void Model::CreateIndexBuffer(const std::vector<uint32_t>& indices)
@@ -186,7 +182,6 @@ void Model::CreateIndexBuffer(const std::vector<uint32_t>& indices)
     uint32_t indexSize = sizeof(indices[0]);
 
     VulkanBuffer stagingBuffer{
-        m_DeviceRef,
         indexSize,
         m_IndexCount,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -197,14 +192,13 @@ void Model::CreateIndexBuffer(const std::vector<uint32_t>& indices)
     stagingBuffer.WriteToBuffer(indices.data());
 
     m_IndexBuffer = std::make_unique<VulkanBuffer>(
-        m_DeviceRef,
         indexSize,
         m_IndexCount,
         VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
         );
 
-    m_DeviceRef.CopyBuffer(
+    VulkanBuffer::CopyBuffer(
             stagingBuffer.GetBuffer(),
             m_IndexBuffer->GetBuffer(),
             bufferSize);

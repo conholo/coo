@@ -34,6 +34,7 @@ public:
 
     VkDevice Device() const { return m_LogicalDevice.Device; }
     VkPhysicalDevice PhysicalDevice() const { return m_PhysicalDevice.PhysicalDevice; }
+    VkPhysicalDeviceProperties PhysicalDeviceProperties() const { return m_PhysicalDevice.PhysicalDeviceProperties; }
 
     VkSurfaceKHR Surface() const { return  m_Surface; }
     VkCommandPool GraphicsCommandPool() const { return m_GraphicsCommandPool; }
@@ -79,7 +80,7 @@ private:
 
     VkCommandPool m_GraphicsCommandPool{};
     VkCommandPool m_ComputeCommandPool{};
-    std::vector<uint32_t> m_QueueFamilyIndices;
+    std::vector<uint32_t> m_QueueFamilyIndices{};
 
     const std::vector<const char *> m_DeviceExtensions =
     {

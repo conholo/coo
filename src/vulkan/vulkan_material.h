@@ -3,6 +3,9 @@ class VulkanMaterial
 public:
     VulkanMaterial(std::shared_ptr<VulkanShader> vertexShader, std::shared_ptr<VulkanShader> fragmentShader);
 
+    void CreateDescriptorSetLayout();
+    void AllocateDescriptorSets();
+
     void CreatePipelineLayout(ShaderResourceManager &resourceManager);
     void AllocateDescriptorSets(ShaderResourceManager &resourceManager);
     void UpdateDescriptorSet(uint32_t set, const std::vector <VkWriteDescriptorSet> &writes);
