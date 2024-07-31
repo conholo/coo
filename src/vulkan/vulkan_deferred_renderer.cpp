@@ -23,6 +23,20 @@ void VulkanDeferredRenderer::Initialize()
 void VulkanDeferredRenderer::CreatePipelines()
 {
     // G-Buffer Pipeline
+    auto gBufferGfxPipelineBuilder = VulkanGraphicsPipelineBuilder()
+            .SetShaders("vertex.spv", "fragment.spv")
+            .SetVertexInputDescription(myVertexDescription)
+            .SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+            .SetPolygonMode(VK_POLYGON_MODE_FILL)
+            .SetCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE)
+            .SetMultisampling(VK_SAMPLE_COUNT_1_BIT)
+            .SetDepthTesting(true, true, VK_COMPARE_OP_LESS)
+            .SetColorBlendAttachment(false)
+            .SetDynamicStates({VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR})
+            .SetLayout(myPipelineLayout)
+            .SetRenderPass(m_GBufferPass->RenderPass());
+
+    m_GBufferPipeline = gBufferGfxPipelineBuilder.Build();
     m_GBufferPipeline = std::make_unique<VulkanGraphicsPipeline>("G-Buffer Pipeline");
     // Set up G-Buffer pipeline states...
     m_GBufferPipeline->SetRenderPass(m_GBufferPass->RenderPass());

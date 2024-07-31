@@ -77,7 +77,9 @@ add_executable(${PROJECT_NAME}
         src/vulkan/vulkan_renderer.cpp
         src/vulkan/vulkan_deferred_renderer.cpp
         src/vulkan/vulkan_framebuffer.cpp
-        src/vulkan/vulkan_graphics_pipeline.cpp)
+        src/vulkan/vulkan_graphics_pipeline.cpp
+        src/vulkan/vulkan_shader.cpp
+        src/vulkan/vulkan_shader_reflection.cpp)
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
