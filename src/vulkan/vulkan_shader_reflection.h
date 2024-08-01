@@ -1,3 +1,5 @@
+#pragma once
+
 #include <spirv_cross/spirv_cross.hpp>
 #include <vector>
 #include <string>

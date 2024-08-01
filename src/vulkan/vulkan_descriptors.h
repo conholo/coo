@@ -1,6 +1,6 @@
 #pragma once
 
-#include "vulkan_device.h"
+#include <vulkan/vulkan.h>
 #include <memory>
 #include <unordered_map>
 #include <vector>

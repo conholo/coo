@@ -1,5 +1,5 @@
-#include(./.env.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
-#message(STATUS "Local .env.cmake: ${LOCAL_ENV}")
+include(./.env.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
+message(STATUS "Local .env.cmake: ${LOCAL_ENV}")
 
 cmake_minimum_required(VERSION 3.11.0)
 set(NAME coo)
@@ -16,13 +16,13 @@ if (CMAKE_GENERATOR STREQUAL "MinGW Makefiles")
     set(CMAKE_CXX_COMPILER ${MINGW_PATH}/bin/g++.exe)
 endif ()
 
-# 1. Set VULKAN_SDK_PATH in .env.cmake to target specific vulkan version
+# Set VULKAN_SDK_PATH in .env.cmake to target specific vulkan version
 if (DEFINED VULKAN_SDK_PATH)
-    set(Vulkan_INCLUDE_DIRS "${VULKAN_SDK_PATH}/Include") # 1.1 Make sure this include path is correct
-    set(Vulkan_LIBRARIES "${VULKAN_SDK_PATH}/Lib") # 1.2 Make sure lib path is correct
+    set(Vulkan_INCLUDE_DIRS "${VULKAN_SDK_PATH}/Include")
+    set(Vulkan_LIBRARIES "${VULKAN_SDK_PATH}/Lib")
     set(Vulkan_FOUND "True")
 else ()
-    find_package(Vulkan REQUIRED) # throws error if could not find Vulkan
+    find_package(Vulkan REQUIRED)
     message(STATUS "Found Vulkan: $ENV{VULKAN_SDK}")
 endif ()
 if (NOT Vulkan_FOUND)
@@ -31,15 +31,15 @@ else ()
     message(STATUS "Using vulkan lib at: ${Vulkan_LIBRARIES}")
 endif ()
 
-# 2. Set GLFW_PATH in .env.cmake to target specific glfw
+# Set GLFW_PATH in .env.cmake to target specific glfw
 if (DEFINED GLFW_PATH)
     message(STATUS "Using GLFW path specified in .env at: ${GLFW_PATH}")
     set(GLFW_INCLUDE_DIRS "${GLFW_PATH}/include")
     if (MSVC)
-        set(GLFW_LIB "${GLFW_PATH}/lib-vc2019") # 2.1 Update lib-vc2019 to use same version as your visual studio
+        set(GLFW_LIB "${GLFW_PATH}/lib-vc2019")
     elseif (CMAKE_GENERATOR STREQUAL "MinGW Makefiles" OR CMAKE_GENERATOR STREQUAL "Ninja")
         message(STATUS "USING MINGW")
-        set(GLFW_LIB "${GLFW_PATH}/lib-mingw-w64") # 2.1 make sure matches glfw mingw subdirectory
+        set(GLFW_LIB "${GLFW_PATH}/lib-mingw-w64")
     endif ()
 else ()
     find_package(glfw3 3.3 REQUIRED)
@@ -55,12 +55,12 @@ endif ()
 # Find shaderc package
 find_package(PkgConfig REQUIRED)
 pkg_search_module(SHADERC REQUIRED shaderc)
-
-# Include shaderc headers
-include_directories(${SHADERC_INCLUDE_DIRS})
-
+# Manually specify SPIRV-Cross paths
+set(SPIRV_CROSS_INCLUDE_DIRS "/usr/local/include/spirv_cross")
+set(SPIRV_CROSS_LIBRARIES "/usr/local/lib/libspirv-cross-core.dylib;/usr/local/lib/libspirv-cross-cpp.dylib;/usr/local/lib/libspirv-cross-glsl.dylib")
+include_directories(${SHADERC_INCLUDE_DIRS} ${SPIRV_CROSS_INCLUDE_DIRS})
 include_directories(external)
-
+link_directories(/usr/local/lib)
 # If TINYOBJ_PATH not specified in .env.cmake, try fetching from git repo
 if (NOT TINYOBJ_PATH)
     set(TINYOBJ_PATH ${CMAKE_SOURCE_DIR}/third_party/)
@@ -90,9 +90,10 @@ add_executable(${PROJECT_NAME}
         src/vulkan/vulkan_buffer.cpp
         src/vulkan/vulkan_model.cpp
         src/vulkan/vulkan_material.cpp
-        src/vulkan/vulkan_descriptors.cpp)
+        src/vulkan/vulkan_descriptors.cpp
+        src/core/game_object.cpp)
 
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
 
 target_include_directories(${NAME} PUBLIC
@@ -122,23 +123,21 @@ if (WIN32)
             ${GLFW_LIB}
     )
 
-    target_link_libraries(${PROJECT_NAME} glfw3 vulkan-1 shaderc)
+    target_link_libraries(${PROJECT_NAME} glfw3 vulkan-1 shaderc_shared spirv-cross-glsl)
 elseif (UNIX)
     message(STATUS "CREATING BUILD FOR UNIX")
     target_include_directories(${PROJECT_NAME} PUBLIC
             ${PROJECT_SOURCE_DIR}/include
             ${TINYOBJ_PATH}
             ${SHADERC_INCLUDE_DIRS}
+            ${SPIRV_CROSS_INCLUDE_DIRS}
     )
-    target_link_libraries(${PROJECT_NAME} glfw ${Vulkan_LIBRARIES} ${SHADERC_LIBRARIES})
-endif ()
-
+    target_link_libraries(${PROJECT_NAME} glfw ${Vulkan_LIBRARIES} ${SHADERC_LIBRARIES} ${SPIRV_CROSS_LIBRARIES})
+endif()
 
 ############## Build SHADERS #######################
 
 # Find all vertex and fragment sources within shaders directory
-# taken from VBlancos vulkan tutorial
-# https://github.com/vblanco20-1/vulkan-guide/blob/all-chapters/CMakeLists.txt
 find_program(GLSL_VALIDATOR glslangValidator HINTS
         ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}
         /usr/bin

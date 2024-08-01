@@ -1,5 +1,6 @@
 #include <numeric>
 #include "game_object.h"
+#include "vulkan/vulkan_context.h"
 
 
 // Matrix corresponds to Translate * Ry * Rx * Rz * Scale
@@ -98,26 +99,21 @@ void GameObjectManager::UpdateBuffer(int frameIndex)
     m_GameObjectUboBuffers[frameIndex]->Flush();
 }
 
-GameObjectManager::GameObjectManager(VulkanDevice& device)
+GameObjectManager::GameObjectManager()
 {
     // including nonCoherentAtomSize allows us to flush a specific index at once
     int alignment = std::lcm(
-        device.PhysicalDeviceProperties.limits.nonCoherentAtomSize,
-        device.PhysicalDeviceProperties.limits.minUniformBufferOffsetAlignment);
+        VulkanContext::Get().PhysicalDeviceProperties().limits.nonCoherentAtomSize,
+        VulkanContext::Get().PhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment);
 
-    for (int i = 0; i < m_GameObjectUboBuffers.size(); i++)
+    for (auto& uboBuffer : m_GameObjectUboBuffers)
     {
-        m_GameObjectUboBuffers[i] = std::make_unique<VulkanBuffer>(
-            device,
+        uboBuffer = std::make_unique<VulkanBuffer>(
             sizeof(GameObjectBufferData),
             GameObjectManager::MAX_GAME_OBJECTS,
             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
             alignment);
-        m_GameObjectUboBuffers[i]->Map();
+        uboBuffer->Map();
     }
-
-    TextureSpecification spec;
-    spec.DebugName = "Missing Texture";
-    m_DefaultTexture = std::make_shared<VulkanTexture2D>(device, spec, std::string("../assets/textures/missing.png"));
 }

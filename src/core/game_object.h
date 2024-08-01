@@ -1,10 +1,10 @@
 #pragma once
 
 #include "vulkan/vulkan_model.h"
+#include "vulkan/vulkan_swapchain.h"
+
 #include <memory>
 #include <unordered_map>
-#include <vulkan_swapchain.h>
-#include <vulkan_texture.h>
 #include <glm/gtc/matrix_transform.hpp>
 
 class GameObjectManager;
@@ -48,9 +48,7 @@ public:
     glm::vec3 Color{};
     TransformComponent ObjectTransform{};
 
-    std::shared_ptr<VulkanTexture2D> DiffuseMap = nullptr;
-    std::shared_ptr<VulkanTexture2D> NormalMap = nullptr;
-    std::shared_ptr<Model> ObjectModel{};
+    std::shared_ptr<VulkanModel> ObjectModel{};
     std::unique_ptr<PointLightComponent> PointLightComp = nullptr;
 
 private:
@@ -69,7 +67,7 @@ class GameObjectManager
 public:
     static constexpr int MAX_GAME_OBJECTS = 1000;
 
-    explicit GameObjectManager(VulkanDevice& device);
+    explicit GameObjectManager();
     GameObjectManager(const GameObjectManager&) = delete;
 
     GameObjectManager& operator=(const GameObjectManager&) = delete;
@@ -81,7 +79,6 @@ public:
         assert(m_CurrentId < MAX_GAME_OBJECTS && "Max game object count exceeded!");
         auto gameObject = GameObject{m_CurrentId++, *this};
         auto gameObjectId = gameObject.GetId();
-        gameObject.DiffuseMap = m_DefaultTexture;
         GameObjects.emplace(gameObjectId, std::move(gameObject));
         return GameObjects.at(gameObjectId);
     }
@@ -100,5 +97,4 @@ public:
 
 private:
     GameObject::id_t m_CurrentId = 0;
-    std::shared_ptr<VulkanTexture2D> m_DefaultTexture;
 };

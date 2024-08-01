@@ -1,6 +1,5 @@
 #pragma once
 
-#include "vulkan_device.h"
 #include "vulkan_swapchain.h"
 #include "core/window.h"
 #include <cassert>

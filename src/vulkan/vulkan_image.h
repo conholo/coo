@@ -4,7 +4,6 @@
 #include <memory>
 #include "core/buffer.h"
 #include "vulkan_context.h"
-#include "vulkan_swapchain.h"
 #include "vulkan_image_utils.h"
 
 #include <vulkan/vulkan.h>

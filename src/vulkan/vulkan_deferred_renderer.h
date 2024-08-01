@@ -1,11 +1,12 @@
 #pragma once
 
-#include "vulkan_renderer.h"
 #include "vulkan_render_pass.h"
 #include "vulkan_framebuffer.h"
 #include "vulkan_graphics_pipeline.h"
+#include "vulkan_image.h"
 #include "vulkan_material.h"
 
+class VulkanRenderer;
 class VulkanDeferredRenderer
 {
 public:
@@ -20,6 +21,8 @@ public:
 private:
     void CreateRenderPasses();
     void CreatePipelines();
+
+    void CreateGBufferRenderPass();
     void CreateGBufferPipeline();
     void CreateFramebuffers();
 

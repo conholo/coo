@@ -2,6 +2,7 @@
 
 #include "vulkan_image.h"
 #include <vector>
+#include <memory>
 
 class VulkanSwapchain
 {

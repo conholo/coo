@@ -1,6 +1,6 @@
 #pragma once
 
-#include "vulkan_device.h"
+#include <vulkan/vulkan.h>
 
 class VulkanBuffer
 {
