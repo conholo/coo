@@ -1,5 +1,5 @@
-include(./.env.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
-message(STATUS "Local .env.cmake: ${LOCAL_ENV}")
+#include(./.env.cmake OPTIONAL RESULT_VARIABLE LOCAL_ENV)
+#message(STATUS "Local .env.cmake: ${LOCAL_ENV}")
 
 cmake_minimum_required(VERSION 3.11.0)
 set(NAME coo)
@@ -52,6 +52,13 @@ else ()
     message(STATUS "Using glfw lib at: ${GLFW_LIB}")
 endif ()
 
+# Find shaderc package
+find_package(PkgConfig REQUIRED)
+pkg_search_module(SHADERC REQUIRED shaderc)
+
+# Include shaderc headers
+include_directories(${SHADERC_INCLUDE_DIRS})
+
 include_directories(external)
 
 # If TINYOBJ_PATH not specified in .env.cmake, try fetching from git repo
@@ -91,7 +98,8 @@ set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CM
 target_include_directories(${NAME} PUBLIC
         ${CMAKE_SOURCE_DIR}/src
         ${Vulkan_INCLUDE_DIRS}
-        ${GLFW_INCLUDE_DIRS})
+        ${GLFW_INCLUDE_DIRS}
+        ${SHADERC_INCLUDE_DIRS})
 
 if (WIN32)
     message(STATUS "CREATING BUILD FOR WINDOWS")
@@ -114,14 +122,15 @@ if (WIN32)
             ${GLFW_LIB}
     )
 
-    target_link_libraries(${PROJECT_NAME} glfw3 vulkan-1)
+    target_link_libraries(${PROJECT_NAME} glfw3 vulkan-1 shaderc)
 elseif (UNIX)
     message(STATUS "CREATING BUILD FOR UNIX")
     target_include_directories(${PROJECT_NAME} PUBLIC
             ${PROJECT_SOURCE_DIR}/include
             ${TINYOBJ_PATH}
+            ${SHADERC_INCLUDE_DIRS}
     )
-    target_link_libraries(${PROJECT_NAME} glfw ${Vulkan_LIBRARIES})
+    target_link_libraries(${PROJECT_NAME} glfw ${Vulkan_LIBRARIES} ${SHADERC_LIBRARIES})
 endif ()
 
 

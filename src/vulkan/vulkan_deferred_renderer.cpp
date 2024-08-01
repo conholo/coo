@@ -1,5 +1,5 @@
 #include "vulkan_deferred_renderer.h"
-
+#include "vulkan_model.h"
 #include <vulkan/vulkan.h>
 
 VulkanDeferredRenderer::VulkanDeferredRenderer(VulkanRenderer* renderer)
@@ -15,32 +15,44 @@ VulkanDeferredRenderer::~VulkanDeferredRenderer()
 
 void VulkanDeferredRenderer::Initialize()
 {
+    m_FullScreenQuadVertexShader = std::make_shared<VulkanShader>("", ShaderType::Vertex);
     CreateRenderPasses();
-    CreateGBufferTextures();
     CreateFramebuffers();
 }
 
-void VulkanDeferredRenderer::CreatePipelines()
+void VulkanDeferredRenderer::CreateRenderPasses()
 {
-    // G-Buffer Pipeline
-    auto gBufferGfxPipelineBuilder = VulkanGraphicsPipelineBuilder()
-            .SetShaders("vertex.spv", "fragment.spv")
-            .SetVertexInputDescription(myVertexDescription)
+    m_GBufferPass = std::make_unique<VulkanRenderPass>("G-Buffer Render Pass");
+    m_GBufferPass->AddAttachment({})
+}
+
+void VulkanDeferredRenderer::CreateGBufferPipeline()
+{
+    m_GBufferVertexShader = std::make_shared<VulkanShader>("../assets/shaders/gbuffer.vert", ShaderType::Vertex);
+    m_GBufferFragmentShader = std::make_shared<VulkanShader>("../assets/shaders/gbuffer.frag", ShaderType::Fragment);
+    m_GBufferMaterial = std::make_shared<VulkanMaterial>(m_GBufferVertexShader, m_GBufferFragmentShader);
+
+    auto builder =
+            VulkanGraphicsPipelineBuilder("G-Buffer Pipeline")
+            .SetShaders(m_GBufferVertexShader, m_GBufferFragmentShader)
+            .SetVertexInputDescription({VulkanModel::Vertex::GetBindingDescriptions(), VulkanModel::Vertex::GetAttributeDescriptions()})
             .SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
             .SetPolygonMode(VK_POLYGON_MODE_FILL)
-            .SetCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE)
+            .SetCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE)
             .SetMultisampling(VK_SAMPLE_COUNT_1_BIT)
-            .SetDepthTesting(true, true, VK_COMPARE_OP_LESS)
+            .SetDepthTesting(true, true, VK_COMPARE_OP_LESS_OR_EQUAL)
             .SetColorBlendAttachment(false)
             .SetDynamicStates({VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR})
-            .SetLayout(myPipelineLayout)
+            .SetLayout(m_GBufferMaterial->GetPipelineLayout())
             .SetRenderPass(m_GBufferPass->RenderPass());
 
-    m_GBufferPipeline = gBufferGfxPipelineBuilder.Build();
-    m_GBufferPipeline = std::make_unique<VulkanGraphicsPipeline>("G-Buffer Pipeline");
-    // Set up G-Buffer pipeline states...
-    m_GBufferPipeline->SetRenderPass(m_GBufferPass->RenderPass());
-    m_GBufferPipeline->Build();
+    m_GBufferPipeline = builder.Build();
+}
+
+
+void VulkanDeferredRenderer::CreatePipelines()
+{
+    CreateGBufferPipeline();
 
     // Lighting Pipeline
     m_LightingPipeline = std::make_unique<VulkanGraphicsPipeline>("Lighting Pipeline");

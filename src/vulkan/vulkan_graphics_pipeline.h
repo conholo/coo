@@ -4,13 +4,13 @@
 #include <vector>
 #include <string>
 #include "vulkan_shader.h"
+#include "vulkan_material.h"
 
 
 class VulkanGraphicsPipeline
 {
 public:
     explicit VulkanGraphicsPipeline(std::string debugName = "GraphicsPipeline");
-
     ~VulkanGraphicsPipeline();
 
     void SetShaderStages(const std::vector <VkPipelineShaderStageCreateInfo> &shaderStages);
@@ -26,7 +26,6 @@ public:
     void SetRenderPass(VkRenderPass renderPass, uint32_t subpass = 0);
 
     void Build();
-
     VkPipeline GraphicsPipeline() const { return m_Pipeline; }
 
 private:
@@ -56,9 +55,8 @@ struct VertexInputDescription
 class VulkanGraphicsPipelineBuilder
 {
 public:
-    VulkanGraphicsPipelineBuilder(std::string debugName = "GraphicsPipeline");
-    VulkanGraphicsPipelineBuilder& SetShaders(const std::string &vertexShaderPath, const std::string &fragmentShaderPath);
-
+    explicit VulkanGraphicsPipelineBuilder(std::string debugName = "GraphicsPipeline");
+    VulkanGraphicsPipelineBuilder& SetShaders(std::shared_ptr<VulkanShader> vertexShader, std::shared_ptr<VulkanShader> fragmentShader);
     VulkanGraphicsPipelineBuilder& SetVertexInputDescription(const VertexInputDescription &description);
     VulkanGraphicsPipelineBuilder& SetPrimitiveTopology(VkPrimitiveTopology topology);
     VulkanGraphicsPipelineBuilder& SetPolygonMode(VkPolygonMode mode);
@@ -91,9 +89,6 @@ private:
     VkPipelineColorBlendAttachmentState m_ColorBlendAttachment{};
     VkPipelineDynamicStateCreateInfo m_DynamicState{};
     std::vector<VkDynamicState> m_DynamicStates;
-
-    std::unique_ptr<VulkanShader> m_VertexShader;
-    std::unique_ptr<VulkanShader> m_FragmentShader;
 
     std::string m_DebugName{};
     void SetupDefaultStates();

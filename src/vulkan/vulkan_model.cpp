@@ -11,9 +11,9 @@
 namespace std
 {
     template<>
-    struct hash<Model::Vertex>
+    struct hash<VulkanModel::Vertex>
     {
-        size_t operator()(const Model::Vertex& vertex) const noexcept
+        size_t operator()(const VulkanModel::Vertex& vertex) const noexcept
         {
             size_t seed = 0;
             EngineUtils::HashCombine(seed, vertex.Position, vertex.Color, vertex.Normal, vertex.UV);
@@ -22,7 +22,7 @@ namespace std
     };
 }
 
-void Model::Builder::LoadModel(const std::string &filePath)
+void VulkanModel::Builder::LoadModel(const std::string &filePath)
 {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
@@ -91,7 +91,7 @@ void Model::Builder::LoadModel(const std::string &filePath)
     ComputeTangentBasis(Vertices, Indices);
 }
 
-void Model::Builder::ComputeTangentBasis(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices)
+void VulkanModel::Builder::ComputeTangentBasis(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices)
 {
     for (size_t i = 0; i < indices.size(); i += 3)
     {
@@ -126,21 +126,21 @@ void Model::Builder::ComputeTangentBasis(std::vector<Vertex>& vertices, const st
     }
 }
 
-Model::Model(const Builder& builder)
+VulkanModel::VulkanModel(const Builder& builder)
 {
     CreateVertexBuffer(builder.Vertices);
     CreateIndexBuffer(builder.Indices);
 }
 
-std::shared_ptr<Model> Model::CreateModelFromFile(const std::string &filePath)
+std::shared_ptr<VulkanModel> VulkanModel::CreateModelFromFile(const std::string &filePath)
 {
     Builder builder{};
     builder.LoadModel(filePath);
-    return std::make_shared<Model>(builder);
+    return std::make_shared<VulkanModel>(builder);
 }
 
 
-void Model::CreateVertexBuffer(const std::vector<Vertex> &vertices)
+void VulkanModel::CreateVertexBuffer(const std::vector<Vertex> &vertices)
 {
     m_VertexCount = static_cast<uint32_t>(vertices.size());
 
@@ -172,7 +172,7 @@ void Model::CreateVertexBuffer(const std::vector<Vertex> &vertices)
             bufferSize);
 }
 
-void Model::CreateIndexBuffer(const std::vector<uint32_t>& indices)
+void VulkanModel::CreateIndexBuffer(const std::vector<uint32_t>& indices)
 {
     m_IndexCount = static_cast<uint32_t>(indices.size());
     m_HasIndexBuffer = m_IndexCount > 0;
@@ -204,7 +204,7 @@ void Model::CreateIndexBuffer(const std::vector<uint32_t>& indices)
             bufferSize);
 }
 
-void Model::Draw(VkCommandBuffer commandBuffer) const
+void VulkanModel::Draw(VkCommandBuffer commandBuffer) const
 {
     if(m_HasIndexBuffer)
     {
@@ -216,7 +216,7 @@ void Model::Draw(VkCommandBuffer commandBuffer) const
     }
 }
 
-void Model::Bind(VkCommandBuffer commandBuffer)
+void VulkanModel::Bind(VkCommandBuffer commandBuffer)
 {
     VkBuffer buffers[] = {m_VertexBuffer->GetBuffer()};
     VkDeviceSize offsets[] = {0};
@@ -227,7 +227,7 @@ void Model::Bind(VkCommandBuffer commandBuffer)
     }
 }
 
-std::vector<VkVertexInputBindingDescription> Model::Vertex::GetBindingDescriptions()
+std::vector<VkVertexInputBindingDescription> VulkanModel::Vertex::GetBindingDescriptions()
 {
     std::vector<VkVertexInputBindingDescription> bindingDescriptions(1);
     bindingDescriptions[0].binding = 0;
@@ -236,7 +236,7 @@ std::vector<VkVertexInputBindingDescription> Model::Vertex::GetBindingDescriptio
     return bindingDescriptions;
 }
 
-std::vector<VkVertexInputAttributeDescription> Model::Vertex::GetAttributeDescriptions()
+std::vector<VkVertexInputAttributeDescription> VulkanModel::Vertex::GetAttributeDescriptions()
 {
     std::vector<VkVertexInputAttributeDescription> attributeDescriptions{};
 

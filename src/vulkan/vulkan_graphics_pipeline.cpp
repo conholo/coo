@@ -152,28 +152,23 @@ void VulkanGraphicsPipelineBuilder::SetupDefaultStates()
     m_DynamicState.pDynamicStates = m_DynamicStates.data();
 }
 
-VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetShaders(const std::string &vertexShaderPath, const std::string &fragmentShaderPath)
+VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetShaders(std::shared_ptr<VulkanShader> vertexShader,
+                                                                         std::shared_ptr<VulkanShader> fragmentShader)
 {
-    m_VertexShader = std::make_unique<VulkanShader>(vertexShaderPath, ShaderType::Vertex);
-    m_FragmentShader = std::make_unique<VulkanShader>(fragmentShaderPath, ShaderType::Fragment);
-
-    m_VertexShader->Load();
-    m_FragmentShader->Load();
-
     m_ShaderStages.clear();
     m_ShaderStages.resize(2);
 
     m_ShaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    m_ShaderStages[0].stage = m_VertexShader->GetShaderStage();
-    m_ShaderStages[0].module = m_VertexShader->GetShaderModule();
+    m_ShaderStages[0].stage = vertexShader->GetShaderStage();
+    m_ShaderStages[0].module = vertexShader->GetShaderModule();
     m_ShaderStages[0].pName = "main";
 
     m_ShaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    m_ShaderStages[1].stage = m_FragmentShader->GetShaderStage();
-    m_ShaderStages[1].module = m_FragmentShader->GetShaderModule();
+    m_ShaderStages[1].stage = fragmentShader->GetShaderStage();
+    m_ShaderStages[1].module = fragmentShader->GetShaderModule();
     m_ShaderStages[1].pName = "main";
 
-    return *this;    return *this;
+    return *this;
 }
 
 VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetPolygonMode(VkPolygonMode mode)

@@ -25,6 +25,7 @@ public:
     VulkanDescriptorSetLayout(const VulkanDescriptorSetLayout&) = delete;
     VulkanDescriptorSetLayout& operator=(const VulkanDescriptorSetLayout&) = delete;
     VkDescriptorSetLayout GetDescriptorSetLayout() const { return m_DescriptorSetLayout; }
+    VkDescriptorSetLayout& GetDescriptorSetLayout() { return m_DescriptorSetLayout; }
 
 private:
     VkDescriptorSetLayout m_DescriptorSetLayout{};
@@ -77,8 +78,8 @@ class VulkanDescriptorWriter
 public:
     VulkanDescriptorWriter(VulkanDescriptorSetLayout& setLayout, VulkanDescriptorPool& pool);
 
-    VulkanDescriptorWriter& WriteBuffer(uint32_t binding, VkDescriptorBufferInfo* bufferInfo);
-    VulkanDescriptorWriter& WriteImage(uint32_t binding, VkDescriptorImageInfo* imageInfo);
+    VulkanDescriptorWriter& WriteBuffer(uint32_t binding, const VkDescriptorBufferInfo* bufferInfo);
+    VulkanDescriptorWriter& WriteImage(uint32_t binding, const VkDescriptorImageInfo* imageInfo);
 
     bool Build(VkDescriptorSet& set);
     void Overwrite(VkDescriptorSet& set);

@@ -148,7 +148,7 @@ VulkanDescriptorWriter::VulkanDescriptorWriter(VulkanDescriptorSetLayout& setLay
 {
 }
 
-VulkanDescriptorWriter& VulkanDescriptorWriter::WriteBuffer(uint32_t binding, VkDescriptorBufferInfo* bufferInfo)
+VulkanDescriptorWriter& VulkanDescriptorWriter::WriteBuffer(uint32_t binding, const VkDescriptorBufferInfo* bufferInfo)
 {
     assert(m_SetLayout.m_Bindings.count(binding) == 1 && "Layout does not contain specified binding");
 
@@ -167,7 +167,7 @@ VulkanDescriptorWriter& VulkanDescriptorWriter::WriteBuffer(uint32_t binding, Vk
     return *this;
 }
 
-VulkanDescriptorWriter& VulkanDescriptorWriter::WriteImage(uint32_t binding, VkDescriptorImageInfo* imageInfo)
+VulkanDescriptorWriter& VulkanDescriptorWriter::WriteImage(uint32_t binding, const VkDescriptorImageInfo* imageInfo)
 {
     assert(m_SetLayout.m_Bindings.count(binding) == 1 && "Layout does not contain specified binding");
 

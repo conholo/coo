@@ -2,6 +2,7 @@
 #include "vulkan_context.h"
 #include <fstream>
 #include <stdexcept>
+#include <shaderc/shaderc.hpp>
 
 VulkanShader::VulkanShader(std::string filePath, ShaderType type)
     : m_FilePath(std::move(filePath)), m_Type(type)
@@ -39,7 +40,6 @@ std::vector<uint32_t> VulkanShader::Compile()
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
 
-    // Set up options (optimization level, etc.)
     options.SetOptimizationLevel(shaderc_optimization_level_performance);
 
     // Determine shader kind

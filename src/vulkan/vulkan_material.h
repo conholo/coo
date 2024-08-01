@@ -1,3 +1,8 @@
+#pragma once
+
+#include "vulkan_shader.h"
+#include "vulkan_descriptors.h"
+
 class VulkanMaterial
 {
 public:
@@ -5,16 +10,25 @@ public:
 
     void CreateDescriptorSetLayout();
     void AllocateDescriptorSets();
+    void UpdateDescriptorSet(uint32_t set, const std::vector<VkWriteDescriptorSet>& writes);
+    void UpdateDescriptorSets(const std::vector<std::pair<uint32_t, std::vector<VkWriteDescriptorSet>>> &updates);
+    void CreatePipelineLayout();
+    void SetPushConstants(VkShaderStageFlags stageFlags, uint32_t offset, uint32_t size, const void *data);
 
-    void CreatePipelineLayout(ShaderResourceManager &resourceManager);
-    void AllocateDescriptorSets(ShaderResourceManager &resourceManager);
-    void UpdateDescriptorSet(uint32_t set, const std::vector <VkWriteDescriptorSet> &writes);
-    void SetPushConstants(void *data, size_t size);
+    VkPipelineLayout GetPipelineLayout() const { return m_PipelineLayout; }
+    const std::vector<VkDescriptorSet>& GetDescriptorSets() const { return m_DescriptorSets; }
+    const std::vector<uint8_t>& GetPushConstantData() const { return m_PushConstantData; }
 
 private:
-    std::shared_ptr <Shader> m_VertexShader;
-    std::shared_ptr <Shader> m_FragmentShader;
+    std::shared_ptr<VulkanShader> m_VertexShader;
+    std::shared_ptr<VulkanShader> m_FragmentShader;
+
     VkPipelineLayout m_PipelineLayout;
-    std::vector <VkDescriptorSet> m_DescriptorSets;
+
     std::vector<uint8_t> m_PushConstantData;
+    std::vector<VkPushConstantRange> m_PushConstantRanges;
+
+    std::vector<VkDescriptorSet> m_DescriptorSets;
+    std::unique_ptr<VulkanDescriptorSetLayout> m_DescriptorSetLayout;
+    std::unique_ptr<VulkanDescriptorPool> m_DescriptorPool;
 };

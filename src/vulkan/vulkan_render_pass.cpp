@@ -119,3 +119,14 @@ void VulkanRenderPass::CreateRenderPass()
 
     VK_CHECK_RESULT(vkCreateRenderPass(VulkanContext::Get().Device(), &renderPassInfo, nullptr, &m_RenderPass));
 }
+
+uint32_t VulkanRenderPass::ColorAttachmentCount()
+{
+    uint32_t counter = 0;
+    for(auto& attachmentDescription: m_Attachments)
+    {
+        if(attachmentDescription.Type == AttachmentType::Color)
+            counter++;
+    }
+    return counter;
+}

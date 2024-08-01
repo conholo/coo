@@ -51,7 +51,9 @@ public:
             VkDependencyFlags dependencyFlags);
 
     void Build();
+
     VkRenderPass RenderPass() const { return m_RenderPass; }
+    uint32_t ColorAttachmentCount();
 
 private:
     std::string m_DebugName;

@@ -4,6 +4,7 @@
 #include "vulkan_render_pass.h"
 #include "vulkan_framebuffer.h"
 #include "vulkan_graphics_pipeline.h"
+#include "vulkan_material.h"
 
 class VulkanDeferredRenderer
 {
@@ -15,6 +16,12 @@ public:
 
     void Render(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t imageIndex);
     void Resize(uint32_t width, uint32_t height);
+
+private:
+    void CreateRenderPasses();
+    void CreatePipelines();
+    void CreateGBufferPipeline();
+    void CreateFramebuffers();
 
 private:
     VulkanRenderer *m_Renderer;
@@ -34,8 +41,14 @@ private:
     std::unique_ptr<VulkanGraphicsPipeline> m_LightingPipeline;
     std::unique_ptr<VulkanGraphicsPipeline> m_CompositionPipeline;
 
-    void CreatePipelines();
-    void CreateRenderPasses();
-    void CreateGBufferTextures();
-    void CreateFramebuffers();
+    std::shared_ptr<VulkanShader> m_GBufferVertexShader;
+    std::shared_ptr<VulkanShader> m_GBufferFragmentShader;
+
+    std::shared_ptr<VulkanShader> m_FullScreenQuadVertexShader;
+    std::shared_ptr<VulkanShader> m_LightingFragmentShader;
+    std::shared_ptr<VulkanShader> m_CompositionFragmentShader;
+
+    std::shared_ptr<VulkanMaterial> m_GBufferMaterial;
+    std::shared_ptr<VulkanMaterial> m_LightingMaterial;
+    std::shared_ptr<VulkanMaterial> m_CompositionMaterial;
 };
