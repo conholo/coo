@@ -100,12 +100,12 @@ void VulkanSwapchain::Create()
     for (uint32_t i = 0; i < imageCount; i++)
     {
         ImageSpecification spec;
-        spec.Width = m_Extent.width;
-        spec.Height = m_Extent.height;
-        spec.Format = ImageUtils::VulkanFormatToImageFormat(m_ImageFormat);
+        spec.Width = m_SwapchainExtent.width;
+        spec.Height = m_SwapchainExtent.height;
+        spec.Format = ImageUtils::VulkanFormatToImageFormat(m_SwapchainImageFormat);
         spec.Usage = ImageUsage::Swapchain;
         spec.ExistingImage = swapChainImages[i];
-        spec.SwapchainFormat = m_ImageFormat;
+        spec.SwapchainFormat = m_SwapchainImageFormat;
 
         m_Images[i] = std::make_shared<VulkanImage2D>(spec);
     }
@@ -113,8 +113,8 @@ void VulkanSwapchain::Create()
 
 void VulkanSwapchain::Resize(uint32_t width, uint32_t height)
 {
-    m_Extent.width = width;
-    m_Extent.height = height;
+    m_SwapchainExtent.width = width;
+    m_SwapchainExtent.height = height;
 
     Destroy();
     Create();

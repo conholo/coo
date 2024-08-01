@@ -1,6 +1,8 @@
 #include "vulkan_physical_device.h"
 #include <set>
 #include <cassert>
+#include <string>
+#include <stdexcept>
 
 void VulkanPhysicalDevice::Initialize(VkPhysicalDevice physicalDevice)
 {

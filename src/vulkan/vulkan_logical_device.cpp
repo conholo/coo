@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <set>
+#include <stdexcept>
 
 void VulkanLogicalDevice::Initialize(VulkanPhysicalDevice& physicalDeviceRef, const std::vector<const char *> &requestedDeviceExtensions)
 {

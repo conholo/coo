@@ -3,6 +3,7 @@
 #include <unordered_set>
 #include <iostream>
 #include <GLFW/glfw3.h>
+#include <cstring>
 
 void VulkanInstance::Initialize(const std::vector<const char*>& requestedValidationLayers, bool enableValidationLayers)
 {

@@ -16,7 +16,7 @@ if (CMAKE_GENERATOR STREQUAL "MinGW Makefiles")
     set(CMAKE_CXX_COMPILER ${MINGW_PATH}/bin/g++.exe)
 endif ()
 
-# Set VULKAN_SDK_PATH in .env.cmake to target specific vulkan version
+# Vulkan SDK setup
 if (DEFINED VULKAN_SDK_PATH)
     set(Vulkan_INCLUDE_DIRS "${VULKAN_SDK_PATH}/Include")
     set(Vulkan_LIBRARIES "${VULKAN_SDK_PATH}/Lib")
@@ -25,20 +25,20 @@ else ()
     find_package(Vulkan REQUIRED)
     message(STATUS "Found Vulkan: $ENV{VULKAN_SDK}")
 endif ()
+
 if (NOT Vulkan_FOUND)
     message(FATAL_ERROR "Could not find Vulkan library!")
 else ()
     message(STATUS "Using vulkan lib at: ${Vulkan_LIBRARIES}")
 endif ()
 
-# Set GLFW_PATH in .env.cmake to target specific glfw
+# GLFW setup
 if (DEFINED GLFW_PATH)
     message(STATUS "Using GLFW path specified in .env at: ${GLFW_PATH}")
     set(GLFW_INCLUDE_DIRS "${GLFW_PATH}/include")
     if (MSVC)
         set(GLFW_LIB "${GLFW_PATH}/lib-vc2019")
     elseif (CMAKE_GENERATOR STREQUAL "MinGW Makefiles" OR CMAKE_GENERATOR STREQUAL "Ninja")
-        message(STATUS "USING MINGW")
         set(GLFW_LIB "${GLFW_PATH}/lib-mingw-w64")
     endif ()
 else ()
@@ -46,61 +46,38 @@ else ()
     set(GLFW_LIB glfw)
     message(STATUS "Found GLFW")
 endif ()
+
 if (NOT GLFW_LIB)
     message(FATAL_ERROR "Could not find glfw library!")
 else ()
     message(STATUS "Using glfw lib at: ${GLFW_LIB}")
 endif ()
 
-# Find shaderc package
-find_package(PkgConfig REQUIRED)
-pkg_search_module(SHADERC REQUIRED shaderc)
-# Manually specify SPIRV-Cross paths
-set(SPIRV_CROSS_INCLUDE_DIRS "/usr/local/include/spirv_cross")
-set(SPIRV_CROSS_LIBRARIES "/usr/local/lib/libspirv-cross-core.dylib;/usr/local/lib/libspirv-cross-cpp.dylib;/usr/local/lib/libspirv-cross-glsl.dylib")
-include_directories(${SHADERC_INCLUDE_DIRS} ${SPIRV_CROSS_INCLUDE_DIRS})
-include_directories(external)
-link_directories(/usr/local/lib)
-# If TINYOBJ_PATH not specified in .env.cmake, try fetching from git repo
+# TinyOBJ setup
 if (NOT TINYOBJ_PATH)
     set(TINYOBJ_PATH ${CMAKE_SOURCE_DIR}/third_party/)
     message(STATUS "TINYOBJ_PATH not specified in .env.cmake, using: ${TINYOBJ_PATH}")
 endif ()
 
 file(GLOB_RECURSE SOURCES ${PROJECT_SOURCE_DIR}/src/*.cpp)
-add_executable(${PROJECT_NAME}
-        src/main.cpp
-        src/core/camera.cpp
-        src/vulkan/vulkan_instance.cpp
-        src/vulkan/vulkan_logical_device.cpp
-        src/vulkan/vulkan_physical_device.cpp
-        src/vulkan/vulkan_context.cpp
-        src/vulkan/vulkan_swapchain.cpp
-        src/vulkan/vulkan_image.cpp
-        src/core/window.cpp
-        src/vulkan/vulkan_image_utils.cpp
-        src/vulkan/vulkan_render_pass.cpp
-        src/vulkan/vulkan_swapchain_renderer.cpp
-        src/vulkan/vulkan_renderer.cpp
-        src/vulkan/vulkan_deferred_renderer.cpp
-        src/vulkan/vulkan_framebuffer.cpp
-        src/vulkan/vulkan_graphics_pipeline.cpp
-        src/vulkan/vulkan_shader.cpp
-        src/vulkan/vulkan_shader_reflection.cpp
-        src/vulkan/vulkan_buffer.cpp
-        src/vulkan/vulkan_model.cpp
-        src/vulkan/vulkan_material.cpp
-        src/vulkan/vulkan_descriptors.cpp
-        src/core/game_object.cpp)
+add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
 
-target_include_directories(${NAME} PUBLIC
+target_include_directories(${PROJECT_NAME} PUBLIC
         ${CMAKE_SOURCE_DIR}/src
         ${Vulkan_INCLUDE_DIRS}
         ${GLFW_INCLUDE_DIRS}
-        ${SHADERC_INCLUDE_DIRS})
+        ${PROJECT_SOURCE_DIR}/include
+        ${TINYOBJ_PATH}
+        ${GLM_PATH}/include
+)
+
+target_link_directories(${PROJECT_NAME} PUBLIC
+        ${Vulkan_LIBRARIES}
+        ${GLFW_LIB}
+)
 
 if (WIN32)
     message(STATUS "CREATING BUILD FOR WINDOWS")
@@ -110,29 +87,65 @@ if (WIN32)
         target_link_directories(${PROJECT_NAME} PUBLIC ${MINGW_PATH}/lib)
     endif ()
 
-    target_include_directories(${PROJECT_NAME} PUBLIC
-            ${PROJECT_SOURCE_DIR}/include
-            ${Vulkan_INCLUDE_DIRS}
-            ${TINYOBJ_PATH}
-            ${GLFW_INCLUDE_DIRS}
-            ${GLM_PATH}/include
+    set(SPIRV_CROSS_PATH "C:/dev/cpp/libs/SPIRV-Cross")
+
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        message(STATUS "Using the following debug builds: shaderc, spirv-cross")
+        set(SHADERC_LIB_PATH "C:/dev/cpp/libs/shaderc/build-debug/libshaderc/libshaderc_combined.a")
+        set(SPIRV_CROSS_BUILD_PATH "${SPIRV_CROSS_PATH}/build-debug")
+    else()
+        message(STATUS "Using the following release builds: shaderc, spirv-cross")
+        set(SHADERC_LIB_PATH "C:/dev/cpp/libs/shaderc/build/libshaderc/libshaderc_combined.a")
+        set(SPIRV_CROSS_BUILD_PATH "${SPIRV_CROSS_PATH}/build")
+    endif()
+
+    set(SHADERC_INCLUDE_DIRS "C:/dev/cpp/libs/shaderc/libshaderc/include")
+    set(SHADERC_LIBRARIES ${SHADERC_LIB_PATH})
+
+    set(SPIRV_CROSS_INCLUDE_DIRS "${SPIRV_CROSS_PATH}/include")
+    set(SPIRV_CROSS_LIBRARIES
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-core.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-glsl.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-hlsl.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-cpp.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-reflect.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-msl.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-util.a"
     )
 
-    target_link_directories(${PROJECT_NAME} PUBLIC
-            ${Vulkan_LIBRARIES}
-            ${GLFW_LIB}
+    include_directories(${SHADERC_INCLUDE_DIRS} ${SPIRV_CROSS_INCLUDE_DIRS})
+    target_link_libraries(${PROJECT_NAME}
+            ${GLFW_LIB}/libglfw3.a
+            ${Vulkan_LIBRARIES}/vulkan-1.lib
+            ${SHADERC_LIBRARIES}
+            ${SPIRV_CROSS_LIBRARIES}
     )
 
-    target_link_libraries(${PROJECT_NAME} glfw3 vulkan-1 shaderc_shared spirv-cross-glsl)
+    # MinGW-specific flags
+    if(USE_MINGW)
+        target_link_libraries(${PROJECT_NAME}
+                -static-libgcc
+                -static-libstdc++
+                -lwsock32
+                -lws2_32
+                -lbcrypt
+        )
+    endif()
+
 elseif (UNIX)
     message(STATUS "CREATING BUILD FOR UNIX")
-    target_include_directories(${PROJECT_NAME} PUBLIC
-            ${PROJECT_SOURCE_DIR}/include
-            ${TINYOBJ_PATH}
-            ${SHADERC_INCLUDE_DIRS}
-            ${SPIRV_CROSS_INCLUDE_DIRS}
+    target_link_libraries(${PROJECT_NAME}
+            glfw
+            ${Vulkan_LIBRARIES}/libvulkan.so
+            ${Vulkan_LIBRARIES}/libshaderc_combined.a
+            ${Vulkan_LIBRARIES}/libspirv-cross-core.a
+            ${Vulkan_LIBRARIES}/libspirv-cross-glsl.a
+            ${Vulkan_LIBRARIES}/libspirv-cross-hlsl.a
+            ${Vulkan_LIBRARIES}/libspirv-cross-msl.a
+            ${Vulkan_LIBRARIES}/libspirv-cross-cpp.a
+            ${Vulkan_LIBRARIES}/libspirv-cross-reflect.a
+            ${Vulkan_LIBRARIES}/libspirv-cross-util.a
     )
-    target_link_libraries(${PROJECT_NAME} glfw ${Vulkan_LIBRARIES} ${SHADERC_LIBRARIES} ${SPIRV_CROSS_LIBRARIES})
 endif()
 
 ############## Build SHADERS #######################

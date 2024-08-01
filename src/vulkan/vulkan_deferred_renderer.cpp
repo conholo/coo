@@ -16,7 +16,7 @@ VulkanDeferredRenderer::~VulkanDeferredRenderer()
 
 void VulkanDeferredRenderer::Initialize()
 {
-    m_FullScreenQuadVertexShader = std::make_shared<VulkanShader>("", ShaderType::Vertex);
+    m_FullScreenQuadVertexShader = std::make_shared<VulkanShader>("../assets/shaders/fsq.vert", ShaderType::Vertex);
     CreateRenderPasses();
     CreateFramebuffers();
 }

@@ -182,6 +182,7 @@ namespace ImageUtils
             case VK_FORMAT_R32G32_SFLOAT:
                 return ImageFormat::RG32F;
             case VK_FORMAT_R8G8B8A8_UNORM:
+            case VK_FORMAT_B8G8R8A8_UNORM:
                 return ImageFormat::RGBA;
             case VK_FORMAT_R16G16B16A16_SFLOAT:
                 return ImageFormat::RGBA16F;

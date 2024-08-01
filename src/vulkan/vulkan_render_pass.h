@@ -5,6 +5,7 @@
 #include "vulkan_image_utils.h"
 #include <vector>
 #include <optional>
+#include <string>
 
 enum class AttachmentType
 {

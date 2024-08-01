@@ -21,8 +21,8 @@ public:
     VkResult AcquireNextImage(uint32_t *imageIndex, VkSemaphore imageAvailableSemaphore);
     void Present(VkSemaphore renderCompleteSemaphore);
 
-    VkFormat ImageFormat() const { return m_ImageFormat; }
-    VkExtent2D Extent() const { return m_Extent; }
+    VkFormat ImageFormat() const { return m_SwapchainImageFormat; }
+    VkExtent2D Extent() const { return m_SwapchainExtent; }
 
     VkSwapchainKHR Swapchain() const { return m_Swapchain; }
     uint32_t Width() const { return m_SwapchainExtent.width; }
@@ -45,10 +45,7 @@ private:
     std::shared_ptr<VulkanSwapchain> m_PreviousSwapchain;
     std::vector<std::shared_ptr<VulkanImage2D>> m_Images;
 
-    VkFormat m_ImageFormat{};
-    VkExtent2D m_Extent{};
     VkPresentModeKHR m_PresentMode{};
-
     VkFormat m_SwapchainImageFormat{};
     VkExtent2D m_SwapchainExtent{};
     VkExtent2D m_WindowExtent{};
