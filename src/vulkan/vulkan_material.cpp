@@ -5,7 +5,7 @@
 VulkanMaterial::VulkanMaterial(std::shared_ptr<VulkanShader> vertexShader, std::shared_ptr<VulkanShader> fragmentShader)
     :m_VertexShader(vertexShader), m_FragmentShader(fragmentShader)
 {
-    CreateDescriptorSetLayout();
+    CreateLayoutAndAllocateDescriptorSetsForShaderStage(*vertexShader, m_DescriptorSets, m_DescriptorSetsLayouts);
     AllocateDescriptorSets();
     CreatePipelineLayout();
 }
@@ -14,7 +14,7 @@ void VulkanMaterial::CreatePipelineLayout()
 {
     std::vector<VkPushConstantRange> pushConstantRanges;
 
-    auto addPushConstants = [&pushConstantRanges](const std::vector<PushConstantRange> &shaderPushConstants)
+    auto addPushConstants = [&pushConstantRanges](const std::vector<VulkanShaderReflection::PushConstantRange> &shaderPushConstants)
     {
         for (const auto &pc: shaderPushConstants)
         {
@@ -55,9 +55,9 @@ void VulkanMaterial::CreatePipelineLayout()
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &m_DescriptorSetLayout->GetDescriptorSetLayout();
-    pipelineLayoutInfo.pushConstantRangeCount = static_cast<uint32_t>(mergedRanges.size());
-    pipelineLayoutInfo.pPushConstantRanges = mergedRanges.data();
+    pipelineLayoutInfo.pSetLayouts = m_DescriptorSetsLayouts.data();
+    pipelineLayoutInfo.pushConstantRangeCount = static_cast<uint32_t>(m_PushConstantRanges.size());
+    pipelineLayoutInfo.pPushConstantRanges = m_PushConstantRanges.data();
 
     if (vkCreatePipelineLayout(VulkanContext::Get().Device(), &pipelineLayoutInfo, nullptr, &m_PipelineLayout) !=
         VK_SUCCESS)
@@ -73,7 +73,7 @@ void VulkanMaterial::SetPushConstants(VkShaderStageFlags stageFlags, uint32_t of
             std::find_if(m_PushConstantRanges.begin(), m_PushConstantRanges.end(),
                [stageFlags, offset, size](const VkPushConstantRange &range)
                {
-                   return (range.stageFlags & stageFlags) &&
+                   return range.stageFlags & stageFlags &&
                           offset >= range.offset &&
                            offset + size <= range.offset + range.size;
                });
@@ -92,23 +92,38 @@ void VulkanMaterial::SetPushConstants(VkShaderStageFlags stageFlags, uint32_t of
     memcpy(m_PushConstantData.data() + offset, data, size);
 }
 
-void VulkanMaterial::CreateDescriptorSetLayout()
+void VulkanMaterial::CreateLayoutAndAllocateDescriptorSetsForShaderStage(VulkanShader& shaderRef,
+                                                                         std::vector<std::unique_ptr<VkDescriptorSet>>& outSets,
+                                                                         std::vector<std::unique_ptr<VulkanDescriptorSetLayout>>& outSetLayouts)
 {
-    VulkanDescriptorSetLayout::Builder builder;
+    uint32_t descriptorSetCount = shaderRef.GetReflection().GetDescriptorSetCount();
+    outSets.clear();
+    outSetLayouts.clear();
+    outSets.resize(descriptorSetCount);
+    outSetLayouts.resize(descriptorSetCount);
+
+    VulkanDescriptorSetLayout::Builder layoutBuilder;
 
     // Add bindings from vertex shader
-    for (const auto &resource: m_VertexShader->GetReflection().GetResources())
+    uint32_t counter = 0;
+    for (const auto &[set, descriptors]: shaderRef.GetReflection().GetDescriptorSets())
     {
-        builder.AddBinding(resource.binding, resource.descriptorType, resource.stageFlags, resource.arraySize);
-    }
+        for(auto& descriptor: descriptors)
+        {
+            layoutBuilder.AddDescriptor(
+                    descriptor.binding,
+                    descriptor.descriptorType,
+                    descriptor.stageFlags,
+                    descriptor.arraySize);
+        }
 
-    // Add bindings from fragment shader
-    for (const auto &resource: m_FragmentShader->GetReflection().GetResources())
-    {
-        builder.AddBinding(resource.binding, resource.descriptorType, resource.stageFlags, resource.arraySize);
-    }
+        // Create the layout for this set composed of the n last descriptors added.
+        auto& setLayout = outSetLayouts.emplace_back(layoutBuilder.Build());
 
-    m_DescriptorSetLayout = builder.Build();
+        std::unique_ptr<VkDescriptorSet>& setRef = outSets[++counter];
+
+        VulkanDescriptorWriter(*setLayout, *m_DescriptorPool).Build(*setRef);
+    }
 }
 
 void VulkanMaterial::AllocateDescriptorSets()
@@ -118,7 +133,7 @@ void VulkanMaterial::AllocateDescriptorSets()
     m_DescriptorPool = poolBuilder.Build();
 
     VkDescriptorSet descriptorSet;
-    m_DescriptorPool->AllocateDescriptor(m_DescriptorSetLayout->GetDescriptorSetLayout(), descriptorSet);
+    m_DescriptorPool->AllocateDescriptor(m_GBufferVertexShaderDescriptorSetLayout->GetDescriptorSetLayout(), descriptorSet);
     m_DescriptorSets.push_back(descriptorSet);
 }
 
@@ -129,7 +144,7 @@ void VulkanMaterial::UpdateDescriptorSet(uint32_t set, const std::vector<VkWrite
         throw std::runtime_error("Descriptor set index out of range");
     }
 
-    VulkanDescriptorWriter writer(*m_DescriptorSetLayout, *m_DescriptorPool);
+    VulkanDescriptorWriter writer(*m_GBufferVertexShaderDescriptorSetLayout, *m_DescriptorPool);
 
     for (auto write: writes)
     {

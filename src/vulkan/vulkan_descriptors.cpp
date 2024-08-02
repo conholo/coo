@@ -7,11 +7,11 @@
 #include <glm/fwd.hpp>
 #include <vulkan/vulkan.h>
 
-VulkanDescriptorSetLayout::Builder& VulkanDescriptorSetLayout::Builder::AddBinding(
-    glm::uint32_t binding,
-    VkDescriptorType descriptorType,
-    VkShaderStageFlags stageFlags,
-    uint32_t count)
+VulkanDescriptorSetLayout::Builder& VulkanDescriptorSetLayout::Builder::AddDescriptor(
+        uint32_t binding,
+        VkDescriptorType descriptorType,
+        VkShaderStageFlags stageFlags,
+        uint32_t count)
 {
     assert(m_Bindings.count(binding) == 0 && "Binding already in use");
     VkDescriptorSetLayoutBinding layoutBinding{};
@@ -33,17 +33,17 @@ std::unique_ptr<VulkanDescriptorSetLayout> VulkanDescriptorSetLayout::Builder::B
 VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(const std::unordered_map<uint32_t, VkDescriptorSetLayoutBinding>&bindings)
     : m_Bindings{bindings}
 {
-    std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings{};
-    setLayoutBindings.reserve(bindings.size());
+    std::vector<VkDescriptorSetLayoutBinding> allBindings{};
+    allBindings.reserve(bindings.size());
     for (auto kv: bindings)
     {
-        setLayoutBindings.push_back(kv.second);
+        allBindings.push_back(kv.second);
     }
 
     VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo{};
     descriptorSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    descriptorSetLayoutInfo.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
-    descriptorSetLayoutInfo.pBindings = setLayoutBindings.data();
+    descriptorSetLayoutInfo.bindingCount = static_cast<uint32_t>(allBindings.size());
+    descriptorSetLayoutInfo.pBindings = allBindings.data();
 
     if (vkCreateDescriptorSetLayout(
             VulkanContext::Get().Device(),

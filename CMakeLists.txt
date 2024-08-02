@@ -93,26 +93,37 @@ if (WIN32)
         message(STATUS "Using the following debug builds: shaderc, spirv-cross")
         set(SHADERC_LIB_PATH "C:/dev/cpp/libs/shaderc/build-debug/libshaderc/libshaderc_combined.a")
         set(SPIRV_CROSS_BUILD_PATH "${SPIRV_CROSS_PATH}/build-debug")
+
+        set(SPIRV_CROSS_LIBRARIES
+                "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-cored.a"
+                "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-glsld.a"
+                "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-hlsld.a"
+                "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-cppd.a"
+                "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-reflectd.a"
+                "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-msld.a"
+                "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-utild.a"
+        )
     else()
         message(STATUS "Using the following release builds: shaderc, spirv-cross")
         set(SHADERC_LIB_PATH "C:/dev/cpp/libs/shaderc/build/libshaderc/libshaderc_combined.a")
+
         set(SPIRV_CROSS_BUILD_PATH "${SPIRV_CROSS_PATH}/build")
+        set(SPIRV_CROSS_LIBRARIES
+                "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-core.a"
+                "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-glsl.a"
+                "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-hlsl.a"
+                "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-cpp.a"
+                "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-reflect.a"
+                "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-msl.a"
+                "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-util.a"
+        )
+
     endif()
 
     set(SHADERC_INCLUDE_DIRS "C:/dev/cpp/libs/shaderc/libshaderc/include")
     set(SHADERC_LIBRARIES ${SHADERC_LIB_PATH})
 
     set(SPIRV_CROSS_INCLUDE_DIRS "${SPIRV_CROSS_PATH}/include")
-    set(SPIRV_CROSS_LIBRARIES
-            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-core.a"
-            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-glsl.a"
-            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-hlsl.a"
-            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-cpp.a"
-            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-reflect.a"
-            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-msl.a"
-            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-util.a"
-    )
-
     include_directories(${SHADERC_INCLUDE_DIRS} ${SPIRV_CROSS_INCLUDE_DIRS})
     target_link_libraries(${PROJECT_NAME}
             ${GLFW_LIB}/libglfw3.a

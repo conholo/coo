@@ -17,8 +17,6 @@ layout(set = 0, binding = 0) uniform GlobalUBO
     mat4 Projection;
     mat4 View;
     mat4 InvView;
-    PointLight PointLights[10];
-    int NumPointLights;
 } u_UBO;
 
 layout(set = 1, binding = 0) uniform GameObjectBufferData

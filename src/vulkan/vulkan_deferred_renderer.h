@@ -19,11 +19,14 @@ public:
     void Resize(uint32_t width, uint32_t height);
 
 private:
-    void CreateRenderPasses();
-    void CreatePipelines();
 
+    void CreateGBufferResources();
+    void CreateGBufferTextures();
     void CreateGBufferRenderPass();
     void CreateGBufferPipeline();
+
+    void CreatePipelines();
+
     void CreateFramebuffers();
 
 private:
@@ -33,7 +36,7 @@ private:
     std::unique_ptr<VulkanRenderPass> m_LightingPass;
     std::unique_ptr<VulkanRenderPass> m_CompositionPass;
 
-    std::vector <std::unique_ptr<VulkanImage2D>> m_GBufferTextures;
+    std::vector<std::unique_ptr<VulkanImage2D>> m_GBufferTextures;
     std::unique_ptr<VulkanImage2D> m_LightingTexture;
 
     std::vector<std::unique_ptr<VulkanFramebuffer>> m_GBufferFramebuffers;

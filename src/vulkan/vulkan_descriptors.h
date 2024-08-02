@@ -12,7 +12,7 @@ public:
     {
     public:
         Builder() = default;
-        Builder& AddBinding(uint32_t binding, VkDescriptorType descriptorType, VkShaderStageFlags stageFlags, uint32_t count = 1);
+        Builder& AddDescriptor(uint32_t binding, VkDescriptorType descriptorType, VkShaderStageFlags stageFlags, uint32_t count = 1);
         [[nodiscard]] std::unique_ptr<VulkanDescriptorSetLayout> Build() const;
 
     private:
