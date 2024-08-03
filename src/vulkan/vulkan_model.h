@@ -53,7 +53,7 @@ public:
     VulkanModel& operator=(const VulkanModel &) = delete;
 
     static std::shared_ptr<VulkanModel> CreateModelFromFile(const std::string& filePath);
-    void Bind(VkCommandBuffer commandBuffer);
+    void BindVertexInput(VkCommandBuffer commandBuffer);
     void Draw(VkCommandBuffer commandBuffer) const;
 
 private:

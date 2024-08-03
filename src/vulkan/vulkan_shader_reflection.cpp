@@ -43,6 +43,7 @@ void VulkanShaderReflection::ReflectResources(const spirv_cross::Compiler& compi
         shaderResource.isWriteOnly = compiler.has_decoration(resource.id, spv::DecorationNonReadable);
 
         m_Resources.push_back(shaderResource);
+        m_DescriptorSets[shaderResource.set].push_back(shaderResource);
 
         std::cout << shaderResource.ToString() << "\n";
     };

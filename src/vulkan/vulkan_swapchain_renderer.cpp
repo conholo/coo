@@ -34,7 +34,7 @@ void VulkanSwapchainRenderer::RecreateSwapchain()
         m_Swapchain = std::make_unique<VulkanSwapchain>(extent, oldSwapChain);
 
         if (!oldSwapChain->CompareFormats(*m_Swapchain))
-            throw std::runtime_error("Swap chain image format has changed!");
+            throw std::runtime_error("Swap chain imageInfo format has changed!");
     }
 
     if (m_RecreateSwapchainCallback)
@@ -85,7 +85,7 @@ VkCommandBuffer VulkanSwapchainRenderer::BeginFrame(uint32_t frameIndex)
     }
 
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
-        throw std::runtime_error("Failed to acquire swap chain image!");
+        throw std::runtime_error("Failed to acquire swap chain imageInfo!");
 
     return m_DrawCommandBuffers[frameIndex];
 }
@@ -146,6 +146,6 @@ void VulkanSwapchainRenderer::EndFrame(uint32_t frameIndex)
     }
     else if (result != VK_SUCCESS)
     {
-        throw std::runtime_error("Failed to present swapchain image!");
+        throw std::runtime_error("Failed to present swapchain imageInfo!");
     }
 }

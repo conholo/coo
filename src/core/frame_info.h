@@ -2,7 +2,6 @@
 
 #include "camera.h"
 #include "game_object.h"
-#include "vulkan_descriptors.h"
 #include <vulkan/vulkan.h>
 
 struct GlobalUbo
@@ -16,8 +15,11 @@ struct GlobalUbo
 
 struct FrameInfo
 {
-    int FrameIndex;
-    float FrameTime;
-    VkDescriptorSet GlobalDescriptorSet;
-    GameObject::Map& GameObjects;
+    size_t FrameCounter;
+    size_t FrameIndex;
+    float DeltaTime;
+    GameObjectManager& GameObjectManager;
+    std::shared_ptr<VulkanBuffer> GlobalUbo;
+    VkCommandBuffer CommandBuffer;
+    Camera& Cam;
 };

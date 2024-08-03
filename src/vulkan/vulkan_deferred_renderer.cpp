@@ -17,9 +17,7 @@ VulkanDeferredRenderer::~VulkanDeferredRenderer()
 void VulkanDeferredRenderer::Initialize()
 {
     m_FullScreenQuadVertexShader = std::make_shared<VulkanShader>("../assets/shaders/fsq.vert", ShaderType::Vertex);
-
     CreateGBufferResources();
-    CreateFramebuffers();
 }
 
 void VulkanDeferredRenderer::CreateGBufferResources()
@@ -27,6 +25,7 @@ void VulkanDeferredRenderer::CreateGBufferResources()
     CreateGBufferTextures();
     CreateGBufferRenderPass();
     CreateGBufferPipeline();
+    CreateGBufferFramebuffers();
 }
 
 void VulkanDeferredRenderer::CreateGBufferTextures()
@@ -74,30 +73,22 @@ void VulkanDeferredRenderer::CreateGBufferTextures()
         .Layers = 1,
         .InvalidateOnConstruction = true
     };
-    m_GBufferTextures.push_back(std::make_unique<VulkanImage2D>(normalImageSpec));
-}
+    m_GBufferTextures.push_back(std::make_unique<VulkanImage2D>(colorImageSpec));
 
-void VulkanDeferredRenderer::CreateGBufferPipeline()
-{
-    m_GBufferVertexShader = std::make_shared<VulkanShader>("../assets/shaders/gbuffer.vert", ShaderType::Vertex);
-    m_GBufferFragmentShader = std::make_shared<VulkanShader>("../assets/shaders/gbuffer.frag", ShaderType::Fragment);
-    m_GBufferMaterial = std::make_shared<VulkanMaterial>(m_GBufferVertexShader, m_GBufferFragmentShader);
-
-    auto builder =
-            VulkanGraphicsPipelineBuilder("G-Buffer Pipeline")
-                    .SetShaders(m_GBufferVertexShader, m_GBufferFragmentShader)
-                    .SetVertexInputDescription({VulkanModel::Vertex::GetBindingDescriptions(), VulkanModel::Vertex::GetAttributeDescriptions()})
-                    .SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-                    .SetPolygonMode(VK_POLYGON_MODE_FILL)
-                    .SetCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE)
-                    .SetMultisampling(VK_SAMPLE_COUNT_1_BIT)
-                    .SetDepthTesting(true, true, VK_COMPARE_OP_LESS_OR_EQUAL)
-                    .SetColorBlendAttachment(false)
-                    .SetDynamicStates({VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR})
-                    .SetLayout(m_GBufferMaterial->GetPipelineLayout())
-                    .SetRenderPass(m_GBufferPass->RenderPass());
-
-    m_GBufferPipeline = builder.Build();
+    ImageSpecification depthImageSpec
+    {
+        .DebugName = "G-Buffer-Depth",
+        .Format = ImageFormat::DEPTH32F,
+        .Usage = ImageUsage::Attachment,
+        .Properties = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        .UsedInTransferOps = true,
+        .Width = m_Renderer->VulkanSwapchain().Width(),
+        .Height = m_Renderer->VulkanSwapchain().Height(),
+        .Mips = 1,
+        .Layers = 1,
+        .InvalidateOnConstruction = true
+    };
+    m_GBufferTextures.push_back(std::make_unique<VulkanImage2D>(depthImageSpec));
 }
 
 void VulkanDeferredRenderer::CreateGBufferRenderPass()
@@ -171,25 +162,28 @@ void VulkanDeferredRenderer::CreateGBufferRenderPass()
     m_GBufferPass->Build();
 }
 
-
-void VulkanDeferredRenderer::CreatePipelines()
+void VulkanDeferredRenderer::CreateGBufferPipeline()
 {
-    CreateGBufferPipeline();
+    m_GBufferVertexShader = std::make_shared<VulkanShader>("../assets/shaders/gbuffer.vert", ShaderType::Vertex);
+    m_GBufferFragmentShader = std::make_shared<VulkanShader>("../assets/shaders/gbuffer.frag", ShaderType::Fragment);
+    m_GBufferMaterial = std::make_shared<VulkanMaterial>(m_GBufferVertexShader, m_GBufferFragmentShader);
 
-    // Lighting Pipeline
-    m_LightingPipeline = std::make_unique<VulkanGraphicsPipeline>("Lighting Pipeline");
-    // Set up Lighting pipeline states...
-    m_LightingPipeline->SetRenderPass(m_LightingPass->RenderPass());
-    m_LightingPipeline->Build();
+    auto builder =
+            VulkanGraphicsPipelineBuilder("G-Buffer Pipeline")
+                    .SetShaders(m_GBufferVertexShader, m_GBufferFragmentShader)
+                    .SetVertexInputDescription({VulkanModel::Vertex::GetBindingDescriptions(), VulkanModel::Vertex::GetAttributeDescriptions()})
+                    .SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+                    .SetPolygonMode(VK_POLYGON_MODE_FILL)
+                    .SetCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE)
+                    .SetMultisampling(VK_SAMPLE_COUNT_1_BIT)
+                    .SetDepthTesting(true, true, VK_COMPARE_OP_LESS_OR_EQUAL)
+                    .SetRenderPass(m_GBufferPass.get())
+                    .SetLayout(m_GBufferMaterial->GetPipelineLayout());
 
-    // Composition Pipeline
-    m_CompositionPipeline = std::make_unique<VulkanGraphicsPipeline>("Composition Pipeline");
-    // Set up Composition pipeline states...
-    m_CompositionPipeline->SetRenderPass(m_CompositionPass->RenderPass());
-    m_CompositionPipeline->Build();
+    m_GBufferPipeline = builder.Build();
 }
 
-void VulkanDeferredRenderer::CreateFramebuffers()
+void VulkanDeferredRenderer::CreateGBufferFramebuffers()
 {
     VkExtent2D extent = m_Renderer->VulkanSwapchain().Extent();
     uint32_t imageCount = m_Renderer->VulkanSwapchain().ImageCount();
@@ -205,66 +199,65 @@ void VulkanDeferredRenderer::CreateFramebuffers()
         m_GBufferFramebuffers[i] = std::make_unique<VulkanFramebuffer>("G-Buffer Framebuffer " + std::to_string(i));
         m_GBufferFramebuffers[i]->Create(m_GBufferPass->RenderPass(), attachments, extent.width, extent.height);
     }
-
-    // Create Lighting framebuffers
-    m_LightingFramebuffers.resize(imageCount);
-    for (uint32_t i = 0; i < imageCount; i++)
-    {
-        std::vector <VkImageView> attachments = {m_LightingTexture->GetView()->ImageView()};
-
-        m_LightingFramebuffers[i] = std::make_unique<VulkanFramebuffer>("Lighting Framebuffer " + std::to_string(i));
-        m_LightingFramebuffers[i]->Create(m_LightingPass->RenderPass(), attachments, extent.width, extent.height);
-    }
-
-    // Create Composition framebuffers
-    m_CompositionFramebuffers.resize(imageCount);
-    for (uint32_t i = 0; i < imageCount; i++)
-    {
-        VkImageView view = m_Renderer->VulkanSwapchain().GetImage(i)->GetView()->ImageView();
-        std::vector <VkImageView> attachments = {view};
-
-        m_CompositionFramebuffers[i] = std::make_unique<VulkanFramebuffer>("Composition Framebuffer " + std::to_string(i));
-        m_CompositionFramebuffers[i]->Create(m_CompositionPass->RenderPass(), attachments, extent.width, extent.height);
-    }
 }
 
-void VulkanDeferredRenderer::Render(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t imageIndex)
+void VulkanDeferredRenderer::Render(FrameInfo& frameInfo)
 {
+    // Update Global Descriptor
+    m_GBufferMaterial->UpdateDescriptor
+    (
+        0, {
+            .binding = 0,
+            .bufferInfo =  frameInfo.GlobalUbo->DescriptorInfo()
+        }
+    );
+
     // G-Buffer Pass
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassInfo.renderPass = m_GBufferPass->RenderPass();
-    renderPassInfo.framebuffer = m_GBufferFramebuffers[frameIndex]->Framebuffer();
+    renderPassInfo.framebuffer = m_GBufferFramebuffers[frameInfo.FrameIndex]->Framebuffer();
     renderPassInfo.renderArea.offset = {0, 0};
     renderPassInfo.renderArea.extent = m_Renderer->VulkanSwapchain().Extent();
 
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_GBufferPipeline->GraphicsPipeline());
+    vkCmdBeginRenderPass(frameInfo.CommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline(frameInfo.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_GBufferPipeline->GetPipeline());
+    for(auto& [id, gameObject] : frameInfo.GameObjectManager.GameObjects)
+    {
+        std::pair<uint32_t, std::vector<DescriptorUpdate>> gameObjectSetUpdates
+        {
+        1,
+        {
+            {
+                .binding = 0,
+                .bufferInfo = frameInfo.GameObjectManager.GetBufferInfoForGameObject(frameInfo.FrameIndex, id)
+            },
+            {
+                .binding = 1,
+                .imageInfo = gameObject.DiffuseMap->GetDescriptorInfo()
+            },
+            {
+                .binding = 2,
+                .imageInfo = gameObject.NormalMap->GetDescriptorInfo()
+              }
+            }
+        };
+
+        m_GBufferMaterial->UpdateDescriptorSets({gameObjectSetUpdates});
+        m_GBufferMaterial->BindDescriptors(frameInfo.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS);
+
+        gameObject.ObjectModel->BindVertexInput(frameInfo.CommandBuffer);
+        gameObject.ObjectModel->Draw(frameInfo.CommandBuffer);
+    }
+
     // Render geometry to G-Buffer
-    vkCmdEndRenderPass(commandBuffer);
-
-    // Lighting Pass
-    renderPassInfo.renderPass = m_LightingPass->RenderPass();
-    renderPassInfo.framebuffer = m_LightingFramebuffers[frameIndex]->Framebuffer();
-
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_LightingPipeline->GraphicsPipeline());
-    // Perform lighting calculations
-    vkCmdEndRenderPass(commandBuffer);
-
-    // Composition Pass (Final output to swapchain image)
-    renderPassInfo.renderPass = m_CompositionPass->RenderPass();
-    renderPassInfo.framebuffer = m_CompositionFramebuffers[imageIndex]->Framebuffer();
-
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_CompositionPipeline->GraphicsPipeline());
-    // Perform final composition
-    vkCmdEndRenderPass(commandBuffer);
+    vkCmdEndRenderPass(frameInfo.CommandBuffer);
 }
 
 void VulkanDeferredRenderer::Resize(uint32_t width, uint32_t height)
 {
-
+    for(auto& gBufferTex: m_GBufferTextures)
+        gBufferTex->Resize(width, height);
 }
 
 

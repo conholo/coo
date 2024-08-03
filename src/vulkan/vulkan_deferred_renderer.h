@@ -5,6 +5,8 @@
 #include "vulkan_graphics_pipeline.h"
 #include "vulkan_image.h"
 #include "vulkan_material.h"
+#include "core/game_object.h"
+#include "core/frame_info.h"
 
 class VulkanRenderer;
 class VulkanDeferredRenderer
@@ -15,7 +17,7 @@ public:
 
     void Initialize();
 
-    void Render(VkCommandBuffer commandBuffer, uint32_t frameIndex, uint32_t imageIndex);
+    void Render(FrameInfo& frameInfo);
     void Resize(uint32_t width, uint32_t height);
 
 private:
@@ -24,10 +26,8 @@ private:
     void CreateGBufferTextures();
     void CreateGBufferRenderPass();
     void CreateGBufferPipeline();
+    void CreateGBufferFramebuffers();
 
-    void CreatePipelines();
-
-    void CreateFramebuffers();
 
 private:
     VulkanRenderer *m_Renderer;

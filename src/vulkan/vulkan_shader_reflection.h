@@ -65,7 +65,7 @@ public:
 
     const std::string& GetEntryPoint() const { return m_EntryPoint; }
     const std::vector<ShaderResource>& GetResources() const { return m_Resources; }
-    const std::map<uint32_t, std::vector<ShaderResource>>& GetDescriptorSets() const { return  m_DescriptorSets; }
+    const std::map<uint32_t, std::vector<ShaderResource>>& GetDescriptorSets() const { return m_DescriptorSets; }
     uint32_t GetDescriptorSetCount() const { return m_DescriptorSets.size(); }
     uint32_t GetTotalDescriptorCountAcrossAllSets() const;
     const std::vector<VertexInputBinding>& GetVertexInputBindings() const { return m_VertexInputBindings; }

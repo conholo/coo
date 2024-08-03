@@ -28,7 +28,7 @@ namespace ImageUtils
             VkPipelineStageFlags srcStageMask,
             VkPipelineStageFlags dstStageMask)
     {
-        // Create an image barrier object
+        // Create an imageInfo barrier object
         VkImageMemoryBarrier imageMemoryBarrier = {};
         imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -71,19 +71,19 @@ namespace ImageUtils
 
             case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
                 // Image is a transfer source
-                // Make sure any reads from the image have been finished
+                // Make sure any reads from the imageInfo have been finished
                 imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
                 break;
 
             case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
                 // Image is a transfer destination
-                // Make sure any writes to the image have been finished
+                // Make sure any writes to the imageInfo have been finished
                 imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
                 break;
 
             case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
                 // Image is read by a shader
-                // Make sure any shader reads from the image have been finished
+                // Make sure any shader reads from the imageInfo have been finished
                 imageMemoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
                 break;
             default:
@@ -91,18 +91,18 @@ namespace ImageUtils
         }
 
         // Target layouts (new)
-        // Destination access mask controls the dependency for the new image layout
+        // Destination access mask controls the dependency for the new imageInfo layout
         switch (newImageLayout)
         {
             case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
                 // Image will be used as a transfer destination
-                // Make sure any writes to the image have been finished
+                // Make sure any writes to the imageInfo have been finished
                 imageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
                 break;
 
             case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
                 // Image will be used as a transfer source
-                // Make sure any reads from the image have been finished
+                // Make sure any reads from the imageInfo have been finished
                 imageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
                 break;
 
@@ -121,7 +121,7 @@ namespace ImageUtils
 
             case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
                 // Image will be read in a shader (sampler, input attachment)
-                // Make sure any writes to the image have been finished
+                // Make sure any writes to the imageInfo have been finished
                 if (imageMemoryBarrier.srcAccessMask == 0)
                 {
                     imageMemoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;

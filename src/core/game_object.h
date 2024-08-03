@@ -48,6 +48,8 @@ public:
     glm::vec3 Color{};
     TransformComponent ObjectTransform{};
 
+    std::shared_ptr<VulkanImage2D> DiffuseMap = nullptr;
+    std::shared_ptr<VulkanImage2D> NormalMap = nullptr;
     std::shared_ptr<VulkanModel> ObjectModel{};
     std::unique_ptr<PointLightComponent> PointLightComp = nullptr;
 
@@ -85,9 +87,9 @@ public:
 
     GameObject& MakePointLight(float intensity = 10.f, float radius = 0.1f, glm::vec3 color = glm::vec3(1.0f));
 
-    VkDescriptorBufferInfo GetBufferInfoForGameObject(int frameIndex, GameObject::id_t gameObjectId) const
+    VkDescriptorBufferInfo GetBufferInfoForGameObject(size_t frameIndex, GameObject::id_t gameObjectId) const
     {
-        return m_GameObjectUboBuffers[frameIndex]->DescriptorInfoForIndex(gameObjectId);
+        return m_GameObjectUboBuffers[frameIndex]->DescriptorInfo(gameObjectId);
     }
 
     void UpdateBuffer(int frameIndex);

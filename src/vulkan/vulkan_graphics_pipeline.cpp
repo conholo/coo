@@ -1,10 +1,13 @@
+// vulkan_graphics_pipeline.cpp
+
 #include "vulkan_graphics_pipeline.h"
 #include "vulkan_context.h"
+#include <stdexcept>
+#include <iostream>
 
 VulkanGraphicsPipeline::VulkanGraphicsPipeline(std::string debugName)
-    : m_DebugName(std::move(debugName))
-{
-}
+        : m_DebugName(std::move(debugName))
+{}
 
 VulkanGraphicsPipeline::~VulkanGraphicsPipeline()
 {
@@ -15,49 +18,117 @@ VulkanGraphicsPipeline::~VulkanGraphicsPipeline()
     }
 }
 
-void VulkanGraphicsPipeline::SetShaderStages(const std::vector <VkPipelineShaderStageCreateInfo> &shaderStages)
+VulkanGraphicsPipeline::VulkanGraphicsPipeline(VulkanGraphicsPipeline&& other) noexcept
+        : m_DebugName(std::move(other.m_DebugName)),
+          m_Pipeline(other.m_Pipeline),
+          m_Layout(other.m_Layout),
+          m_RenderPass(other.m_RenderPass),
+          m_Subpass(other.m_Subpass),
+          m_ShaderStages(std::move(other.m_ShaderStages)),
+          m_VertexInputState(other.m_VertexInputState),
+          m_BindingDescriptions(std::move(other.m_BindingDescriptions)),
+          m_AttributeDescriptions(std::move(other.m_AttributeDescriptions)),
+          m_InputAssemblyState(other.m_InputAssemblyState),
+          m_ViewportState(other.m_ViewportState),
+          m_RasterizationState(other.m_RasterizationState),
+          m_MultisampleState(other.m_MultisampleState),
+          m_DepthStencilState(other.m_DepthStencilState),
+          m_ColorBlendState(other.m_ColorBlendState),
+          m_ColorBlendAttachments(std::move(other.m_ColorBlendAttachments)),
+          m_DynamicState(other.m_DynamicState),
+          m_DynamicStates(std::move(other.m_DynamicStates))
 {
-    m_ShaderStages = shaderStages;
+    other.m_Pipeline = VK_NULL_HANDLE;
 }
 
-void VulkanGraphicsPipeline::SetVertexInputState(const VkPipelineVertexInputStateCreateInfo &vertexInputState)
+VulkanGraphicsPipeline& VulkanGraphicsPipeline::operator=(VulkanGraphicsPipeline&& other) noexcept
+{
+    if (this != &other)
+    {
+        if (m_Pipeline != VK_NULL_HANDLE)
+        {
+            vkDestroyPipeline(VulkanContext::Get().Device(), m_Pipeline, nullptr);
+        }
+
+        m_DebugName = std::move(other.m_DebugName);
+        m_Pipeline = other.m_Pipeline;
+        m_Layout = other.m_Layout;
+        m_RenderPass = other.m_RenderPass;
+        m_Subpass = other.m_Subpass;
+        m_ShaderStages = std::move(other.m_ShaderStages);
+        m_VertexInputState = other.m_VertexInputState;
+        m_BindingDescriptions = std::move(other.m_BindingDescriptions);
+        m_AttributeDescriptions = std::move(other.m_AttributeDescriptions);
+        m_InputAssemblyState = other.m_InputAssemblyState;
+        m_ViewportState = other.m_ViewportState;
+        m_RasterizationState = other.m_RasterizationState;
+        m_MultisampleState = other.m_MultisampleState;
+        m_DepthStencilState = other.m_DepthStencilState;
+        m_ColorBlendState = other.m_ColorBlendState;
+        m_ColorBlendAttachments = std::move(other.m_ColorBlendAttachments);
+        m_DynamicState = other.m_DynamicState;
+        m_DynamicStates = std::move(other.m_DynamicStates);
+
+        other.m_Pipeline = VK_NULL_HANDLE;
+    }
+    return *this;
+}
+
+void VulkanGraphicsPipeline::SetShaderStages(std::vector<VkPipelineShaderStageCreateInfo>&& shaderStages)
+{
+    m_ShaderStages = std::move(shaderStages);
+}
+
+void VulkanGraphicsPipeline::SetVertexInputState(const VkPipelineVertexInputStateCreateInfo& vertexInputState,
+                                                 std::vector<VkVertexInputBindingDescription>&& bindings,
+                                                 std::vector<VkVertexInputAttributeDescription>&& attributes)
 {
     m_VertexInputState = vertexInputState;
+    m_BindingDescriptions = std::move(bindings);
+    m_AttributeDescriptions = std::move(attributes);
+    m_VertexInputState.pVertexBindingDescriptions = m_BindingDescriptions.data();
+    m_VertexInputState.pVertexAttributeDescriptions = m_AttributeDescriptions.data();
 }
 
-void VulkanGraphicsPipeline::SetInputAssemblyState(const VkPipelineInputAssemblyStateCreateInfo &inputAssemblyState)
+void VulkanGraphicsPipeline::SetInputAssemblyState(const VkPipelineInputAssemblyStateCreateInfo& inputAssemblyState)
 {
     m_InputAssemblyState = inputAssemblyState;
 }
 
-void VulkanGraphicsPipeline::SetViewportState(const VkPipelineViewportStateCreateInfo &viewportState)
+void VulkanGraphicsPipeline::SetViewportState(const VkPipelineViewportStateCreateInfo& viewportState)
 {
     m_ViewportState = viewportState;
 }
 
-void VulkanGraphicsPipeline::SetRasterizationState(const VkPipelineRasterizationStateCreateInfo &rasterizationState)
+void VulkanGraphicsPipeline::SetRasterizationState(const VkPipelineRasterizationStateCreateInfo& rasterizationState)
 {
     m_RasterizationState = rasterizationState;
 }
 
-void VulkanGraphicsPipeline::SetMultisampleState(const VkPipelineMultisampleStateCreateInfo &multisampleState)
+void VulkanGraphicsPipeline::SetMultisampleState(const VkPipelineMultisampleStateCreateInfo& multisampleState)
 {
     m_MultisampleState = multisampleState;
 }
 
-void VulkanGraphicsPipeline::SetDepthStencilState(const VkPipelineDepthStencilStateCreateInfo &depthStencilState)
+void VulkanGraphicsPipeline::SetDepthStencilState(const VkPipelineDepthStencilStateCreateInfo& depthStencilState)
 {
     m_DepthStencilState = depthStencilState;
 }
 
-void VulkanGraphicsPipeline::SetColorBlendState(const VkPipelineColorBlendStateCreateInfo &colorBlendState)
+void VulkanGraphicsPipeline::SetColorBlendState(const VkPipelineColorBlendStateCreateInfo& colorBlendState,
+                                                std::vector<VkPipelineColorBlendAttachmentState>&& colorBlendAttachments)
 {
     m_ColorBlendState = colorBlendState;
+    m_ColorBlendAttachments = std::move(colorBlendAttachments);
+    m_ColorBlendState.pAttachments = m_ColorBlendAttachments.data();
 }
 
-void VulkanGraphicsPipeline::SetDynamicState(const VkPipelineDynamicStateCreateInfo &dynamicState)
+void VulkanGraphicsPipeline::SetDynamicState(const VkPipelineDynamicStateCreateInfo& dynamicState,
+                                             std::vector<VkDynamicState>&& dynamicStates)
 {
     m_DynamicState = dynamicState;
+    m_DynamicStates = std::move(dynamicStates);
+    m_DynamicState.pDynamicStates = m_DynamicStates.data();
 }
 
 void VulkanGraphicsPipeline::SetLayout(VkPipelineLayout layout)
@@ -91,8 +162,7 @@ void VulkanGraphicsPipeline::Build()
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineInfo.basePipelineIndex = -1;
 
-    VkResult result = vkCreateGraphicsPipelines(VulkanContext::Get().Device(), VK_NULL_HANDLE, 1, &pipelineInfo,
-                                                nullptr, &m_Pipeline);
+    VkResult result = vkCreateGraphicsPipelines(VulkanContext::Get().Device(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_Pipeline);
     if (result != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create graphics pipeline: " + m_DebugName);
@@ -100,19 +170,17 @@ void VulkanGraphicsPipeline::Build()
 }
 
 VulkanGraphicsPipelineBuilder::VulkanGraphicsPipelineBuilder(std::string debugName)
-    :m_DebugName(std::move(debugName))
+        : m_DebugName(std::move(debugName))
 {
     SetupDefaultStates();
 }
 
 void VulkanGraphicsPipelineBuilder::SetupDefaultStates()
 {
-    // Input Assembly
     m_InputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     m_InputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     m_InputAssemblyState.primitiveRestartEnable = VK_FALSE;
 
-    // Rasterization
     m_RasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     m_RasterizationState.depthClampEnable = VK_FALSE;
     m_RasterizationState.rasterizerDiscardEnable = VK_FALSE;
@@ -122,12 +190,10 @@ void VulkanGraphicsPipelineBuilder::SetupDefaultStates()
     m_RasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
     m_RasterizationState.depthBiasEnable = VK_FALSE;
 
-    // Multisampling
     m_MultisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     m_MultisampleState.sampleShadingEnable = VK_FALSE;
     m_MultisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-    // Depth and Stencil
     m_DepthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     m_DepthStencilState.depthTestEnable = VK_TRUE;
     m_DepthStencilState.depthWriteEnable = VK_TRUE;
@@ -135,39 +201,61 @@ void VulkanGraphicsPipelineBuilder::SetupDefaultStates()
     m_DepthStencilState.depthBoundsTestEnable = VK_FALSE;
     m_DepthStencilState.stencilTestEnable = VK_FALSE;
 
-    // Color Blend
-    m_ColorBlendAttachment.blendEnable = VK_FALSE;
-    m_ColorBlendAttachment.colorWriteMask =
-            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    m_ColorBlendAttachmentStates.resize(1);
+    m_ColorBlendAttachmentStates[0].blendEnable = VK_FALSE;
+    m_ColorBlendAttachmentStates[0].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
     m_ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     m_ColorBlendState.logicOpEnable = VK_FALSE;
     m_ColorBlendState.attachmentCount = 1;
-    m_ColorBlendState.pAttachments = &m_ColorBlendAttachment;
+    m_ColorBlendState.pAttachments = m_ColorBlendAttachmentStates.data();
 
-    // Dynamic State
+    m_ViewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    m_ViewportState.viewportCount = 1;
+    m_ViewportState.scissorCount = 1;
+
     m_DynamicStates = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     m_DynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     m_DynamicState.dynamicStateCount = static_cast<uint32_t>(m_DynamicStates.size());
     m_DynamicState.pDynamicStates = m_DynamicStates.data();
 }
 
-VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetShaders(std::shared_ptr<VulkanShader> vertexShader,
-                                                                         std::shared_ptr<VulkanShader> fragmentShader)
+VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetShaders(const std::shared_ptr<VulkanShader>& vertexShader, const std::shared_ptr<VulkanShader>& fragmentShader)
 {
-    m_ShaderStages.clear();
     m_ShaderStages.resize(2);
-
+    m_ShaderStages[0] = {};
     m_ShaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     m_ShaderStages[0].stage = vertexShader->GetShaderStage();
     m_ShaderStages[0].module = vertexShader->GetShaderModule();
     m_ShaderStages[0].pName = "main";
 
+    m_ShaderStages[1] = {};
     m_ShaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     m_ShaderStages[1].stage = fragmentShader->GetShaderStage();
     m_ShaderStages[1].module = fragmentShader->GetShaderModule();
     m_ShaderStages[1].pName = "main";
 
+    return *this;
+}
+
+VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetVertexInputDescription(const VertexInputDescription& description)
+{
+    m_BindingDescriptions = description.bindings;
+    m_AttributeDescriptions = description.attributes;
+
+    m_VertexInputState = {};
+    m_VertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    m_VertexInputState.vertexBindingDescriptionCount = static_cast<uint32_t>(m_BindingDescriptions.size());
+    m_VertexInputState.pVertexBindingDescriptions = m_BindingDescriptions.data();
+    m_VertexInputState.vertexAttributeDescriptionCount = static_cast<uint32_t>(m_AttributeDescriptions.size());
+    m_VertexInputState.pVertexAttributeDescriptions = m_AttributeDescriptions.data();
+
+    return *this;
+}
+
+VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetPrimitiveTopology(VkPrimitiveTopology topology)
+{
+    m_InputAssemblyState.topology = topology;
     return *this;
 }
 
@@ -186,59 +274,48 @@ VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetCullMode(VkCull
 
 VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetMultisampling(VkSampleCountFlagBits samples)
 {
-    m_MultisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    m_MultisampleState.sampleShadingEnable = VK_FALSE;
     m_MultisampleState.rasterizationSamples = samples;
-    m_MultisampleState.minSampleShading = 1.0f;
-    m_MultisampleState.pSampleMask = nullptr;
-    m_MultisampleState.alphaToCoverageEnable = VK_FALSE;
-    m_MultisampleState.alphaToOneEnable = VK_FALSE;
     return *this;
 }
 
 VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetDepthTesting(bool enable, bool writeEnable, VkCompareOp compareOp)
 {
-    m_DepthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     m_DepthStencilState.depthTestEnable = enable ? VK_TRUE : VK_FALSE;
     m_DepthStencilState.depthWriteEnable = writeEnable ? VK_TRUE : VK_FALSE;
     m_DepthStencilState.depthCompareOp = compareOp;
-    m_DepthStencilState.depthBoundsTestEnable = VK_FALSE;
-    m_DepthStencilState.stencilTestEnable = VK_FALSE;
     return *this;
 }
 
-VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetColorBlendAttachment(bool blendEnable, VkColorComponentFlags colorWriteMask)
+VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetColorBlendAttachment(
+        uint32_t attachmentIndex,
+        bool blendEnable,
+        VkColorComponentFlags colorWriteMask)
 {
-    m_ColorBlendAttachment.blendEnable = blendEnable ? VK_TRUE : VK_FALSE;
-    m_ColorBlendAttachment.colorWriteMask = colorWriteMask;
+    if (attachmentIndex >= m_ColorBlendAttachmentStates.size())
+    {
+        throw std::runtime_error("Attachment index out of range");
+    }
+
+    auto& attachment = m_ColorBlendAttachmentStates[attachmentIndex];
+    attachment.blendEnable = blendEnable ? VK_TRUE : VK_FALSE;
+    attachment.colorWriteMask = colorWriteMask;
 
     if (blendEnable)
     {
-        m_ColorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-        m_ColorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        m_ColorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-        m_ColorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        m_ColorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-        m_ColorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+        attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        attachment.colorBlendOp = VK_BLEND_OP_ADD;
+        attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        attachment.alphaBlendOp = VK_BLEND_OP_ADD;
     }
-
-    m_ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    m_ColorBlendState.logicOpEnable = VK_FALSE;
-    m_ColorBlendState.logicOp = VK_LOGIC_OP_COPY;
-    m_ColorBlendState.attachmentCount = 1;
-    m_ColorBlendState.pAttachments = &m_ColorBlendAttachment;
-    m_ColorBlendState.blendConstants[0] = 0.0f;
-    m_ColorBlendState.blendConstants[1] = 0.0f;
-    m_ColorBlendState.blendConstants[2] = 0.0f;
-    m_ColorBlendState.blendConstants[3] = 0.0f;
 
     return *this;
 }
 
-VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetDynamicStates(const std::vector<VkDynamicState> &dynamicStates)
+VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetDynamicStates(const std::vector<VkDynamicState>& dynamicStates)
 {
     m_DynamicStates = dynamicStates;
-    m_DynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     m_DynamicState.dynamicStateCount = static_cast<uint32_t>(m_DynamicStates.size());
     m_DynamicState.pDynamicStates = m_DynamicStates.data();
     return *this;
@@ -246,46 +323,50 @@ VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetDynamicStates(c
 
 VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetLayout(VkPipelineLayout layout)
 {
-    m_Pipeline.SetLayout(layout);
+    m_PipelineLayout = layout;
     return *this;
 }
 
-VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetRenderPass(VkRenderPass renderPass, uint32_t subpass)
+VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetRenderPass(const VulkanRenderPass* renderPass, uint32_t subpass)
 {
-    m_Pipeline.SetRenderPass(renderPass, subpass);
-    return *this;
-}
+    m_RenderPass = renderPass->RenderPass();
+    m_Subpass = subpass;
 
-VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetVertexInputDescription(const VertexInputDescription &description)
-{
-    m_VertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    m_VertexInputState.vertexBindingDescriptionCount = static_cast<uint32_t>(description.bindings.size());
-    m_VertexInputState.pVertexBindingDescriptions = description.bindings.data();
-    m_VertexInputState.vertexAttributeDescriptionCount = static_cast<uint32_t>(description.attributes.size());
-    m_VertexInputState.pVertexAttributeDescriptions = description.attributes.data();
-    return *this;
-}
+    // Set up color blend attachments based on the render pass
+    const auto& attachments = renderPass->GetAttachmentDescriptions();
+    m_ColorBlendAttachmentStates.clear();
+    for (const auto& attachment : attachments)
+    {
+        if (attachment.Type == AttachmentType::Color)
+        {
+            VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
+            colorBlendAttachment.blendEnable = VK_FALSE;
+            colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+            m_ColorBlendAttachmentStates.push_back(colorBlendAttachment);
+        }
+    }
 
-VulkanGraphicsPipelineBuilder &VulkanGraphicsPipelineBuilder::SetPrimitiveTopology(VkPrimitiveTopology topology)
-{
-    m_InputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    m_InputAssemblyState.topology = topology;
-    m_InputAssemblyState.primitiveRestartEnable = VK_FALSE;
+    m_ColorBlendState.attachmentCount = static_cast<uint32_t>(m_ColorBlendAttachmentStates.size());
+    m_ColorBlendState.pAttachments = m_ColorBlendAttachmentStates.data();
+
     return *this;
 }
 
 std::unique_ptr<VulkanGraphicsPipeline> VulkanGraphicsPipelineBuilder::Build()
 {
     auto pipeline = std::make_unique<VulkanGraphicsPipeline>(m_DebugName);
-    pipeline->SetShaderStages(m_ShaderStages);
-    pipeline->SetVertexInputState(m_VertexInputState);
+    pipeline->SetShaderStages(std::move(m_ShaderStages));
+    pipeline->SetVertexInputState(m_VertexInputState, std::move(m_BindingDescriptions), std::move(m_AttributeDescriptions));
     pipeline->SetInputAssemblyState(m_InputAssemblyState);
     pipeline->SetViewportState(m_ViewportState);
     pipeline->SetRasterizationState(m_RasterizationState);
     pipeline->SetMultisampleState(m_MultisampleState);
     pipeline->SetDepthStencilState(m_DepthStencilState);
-    pipeline->SetColorBlendState(m_ColorBlendState);
-    pipeline->SetDynamicState(m_DynamicState);
+    pipeline->SetColorBlendState(m_ColorBlendState, std::move(m_ColorBlendAttachmentStates));
+    pipeline->SetDynamicState(m_DynamicState, std::move(m_DynamicStates));
+    pipeline->SetLayout(m_PipelineLayout);
+    pipeline->SetRenderPass(m_RenderPass, m_Subpass);
     pipeline->Build();
     return pipeline;
 }

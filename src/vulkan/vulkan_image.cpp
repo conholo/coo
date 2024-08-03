@@ -38,7 +38,7 @@ VulkanImage2D::~VulkanImage2D()
 
 void VulkanImage2D::Release()
 {
-    m_MipViews.clear();  // Destroys all image views
+    m_MipViews.clear();  // Destroys all imageInfo views
 
     if (m_Sampler != VK_NULL_HANDLE)
     {
@@ -294,7 +294,7 @@ void VulkanImage2D::UpdateImageViews()
 {
     VkImageLayout layout;
 
-    // Determine the appropriate image layout based on the image specification
+    // Determine the appropriate imageInfo layout based on the imageInfo specification
     if (m_Specification.Usage == ImageUsage::Swapchain)
     {
         layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;

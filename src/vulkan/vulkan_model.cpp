@@ -216,7 +216,7 @@ void VulkanModel::Draw(VkCommandBuffer commandBuffer) const
     }
 }
 
-void VulkanModel::Bind(VkCommandBuffer commandBuffer)
+void VulkanModel::BindVertexInput(VkCommandBuffer commandBuffer)
 {
     VkBuffer buffers[] = {m_VertexBuffer->GetBuffer()};
     VkDeviceSize offsets[] = {0};

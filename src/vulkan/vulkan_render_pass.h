@@ -56,6 +56,8 @@ public:
     VkRenderPass RenderPass() const { return m_RenderPass; }
     uint32_t ColorAttachmentCount();
 
+    const std::vector<AttachmentDescription>& GetAttachmentDescriptions() const { return m_Attachments; }
+
 private:
     std::string m_DebugName;
     std::vector <AttachmentDescription> m_Attachments;

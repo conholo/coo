@@ -31,7 +31,7 @@ std::unique_ptr<VulkanDescriptorSetLayout> VulkanDescriptorSetLayout::Builder::B
 // *************** Descriptor Set Layout *********************
 
 VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(const std::unordered_map<uint32_t, VkDescriptorSetLayoutBinding>&bindings)
-    : m_Bindings{bindings}
+    : m_Descriptors{bindings}
 {
     std::vector<VkDescriptorSetLayoutBinding> allBindings{};
     allBindings.reserve(bindings.size());
@@ -58,6 +58,17 @@ VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(const std::unordered_map<ui
 VulkanDescriptorSetLayout::~VulkanDescriptorSetLayout()
 {
     vkDestroyDescriptorSetLayout(VulkanContext::Get().Device(), m_DescriptorSetLayout, nullptr);
+}
+
+std::vector<VkDescriptorSetLayoutBinding> VulkanDescriptorSetLayout::GetDescriptors() const
+{
+        std::vector<VkDescriptorSetLayoutBinding> descriptors;
+        descriptors.reserve(m_Descriptors.size());
+        for (const auto& [binding, descriptor] : m_Descriptors)
+        {
+            descriptors.push_back(descriptor);
+        }
+        return descriptors;
 }
 
 // *************** Descriptor Pool Builder *********************
@@ -150,9 +161,9 @@ VulkanDescriptorWriter::VulkanDescriptorWriter(VulkanDescriptorSetLayout& setLay
 
 VulkanDescriptorWriter& VulkanDescriptorWriter::WriteBuffer(uint32_t binding, const VkDescriptorBufferInfo* bufferInfo)
 {
-    assert(m_SetLayout.m_Bindings.count(binding) == 1 && "Layout does not contain specified binding");
+    assert(m_SetLayout.m_Descriptors.count(binding) == 1 && "Layout does not contain specified binding");
 
-    auto& bindingDescription = m_SetLayout.m_Bindings[binding];
+    auto& bindingDescription = m_SetLayout.m_Descriptors[binding];
 
     assert(bindingDescription.descriptorCount == 1 && "Binding single descriptor info, but binding expects multiple");
 
@@ -169,9 +180,9 @@ VulkanDescriptorWriter& VulkanDescriptorWriter::WriteBuffer(uint32_t binding, co
 
 VulkanDescriptorWriter& VulkanDescriptorWriter::WriteImage(uint32_t binding, const VkDescriptorImageInfo* imageInfo)
 {
-    assert(m_SetLayout.m_Bindings.count(binding) == 1 && "Layout does not contain specified binding");
+    assert(m_SetLayout.m_Descriptors.count(binding) == 1 && "Layout does not contain specified binding");
 
-    auto&bindingDescription = m_SetLayout.m_Bindings[binding];
+    auto& bindingDescription = m_SetLayout.m_Descriptors[binding];
 
     assert(
         bindingDescription.descriptorCount == 1 &&

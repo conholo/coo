@@ -24,12 +24,12 @@ public:
 
     VulkanDescriptorSetLayout(const VulkanDescriptorSetLayout&) = delete;
     VulkanDescriptorSetLayout& operator=(const VulkanDescriptorSetLayout&) = delete;
-    VkDescriptorSetLayout GetDescriptorSetLayout() const { return m_DescriptorSetLayout; }
+    std::vector<VkDescriptorSetLayoutBinding> GetDescriptors() const;
     VkDescriptorSetLayout& GetDescriptorSetLayout() { return m_DescriptorSetLayout; }
 
 private:
     VkDescriptorSetLayout m_DescriptorSetLayout{};
-    std::unordered_map<uint32_t, VkDescriptorSetLayoutBinding> m_Bindings;
+    std::unordered_map<uint32_t, VkDescriptorSetLayoutBinding> m_Descriptors;
 
     friend class VulkanDescriptorWriter;
 };
