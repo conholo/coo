@@ -4,6 +4,9 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
+#include "core/event/event.h"
+#include "core/event/mouse_event.h"
+#include "core/event/window_event.h"
 
 struct InputState
 {
@@ -40,16 +43,14 @@ public:
     void SetPerspectiveProjection(float fovy, float aspect, float near, float far);
     void UpdateView();
 
-    [[nodiscard]] const glm::mat4& GetProjection() const { return m_ProjectionMatrix; }
-    [[nodiscard]] const glm::mat4& GetView() const { return m_ViewMatrix; }
-    [[nodiscard]] const glm::mat4& GetInvView() const { return m_InvViewMatrix; }
-    [[nodiscard]] const glm::mat4& GetInvProjection() const { return m_InverseProjectionMatrix; }
+    const glm::mat4& GetProjection() const { return m_ProjectionMatrix; }
+    const glm::mat4& GetView() const { return m_ViewMatrix; }
+    const glm::mat4& GetInvView() const { return m_InvViewMatrix; }
+    const glm::mat4& GetInvProjection() const { return m_InverseProjectionMatrix; }
     glm::vec3 GetPosition() { return {m_InvViewMatrix[3] }; }
 
     void Tick(float deltaTime);
-    void OnMouseButton(int button, int action, int /* modifiers */, double cursorX, double cursorY);
-    void OnScroll(double/* xoffset*/, double yoffset);
-    void OnMouseMove(double xpos, double ypos);
+    void OnEvent(Event &event);
 
 private:
     InputState m_CurrentInputState;
@@ -59,4 +60,9 @@ private:
     glm::mat4 m_ProjectionMatrix{1.0f};
     glm::mat4 m_ViewMatrix{1.0f};
     glm::mat4 m_InvViewMatrix{1.0f};
+
+    bool OnMouseButtonPressed(MouseButtonPressedEvent& pressedEvent);
+    bool OnMouseButtonReleased(MouseButtonReleasedEvent& releasedEvent);
+    bool OnScroll(MouseScrolledEvent& mouseScrolledEvent);
+    bool OnMouseMove(MouseMovedEvent& mouseMovedEvent);
 };

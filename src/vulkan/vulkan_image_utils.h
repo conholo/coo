@@ -16,6 +16,7 @@ enum class ImageFormat
     RG32F,
     RGB,
     RGBA,
+    BGRA,
     RGBA16F,
     RGBA32F,
 
@@ -83,6 +84,7 @@ namespace ImageUtils
             case ImageFormat::RGB:
             case ImageFormat::SRGB:
                 return 3;
+            case ImageFormat::BGRA:
             case ImageFormat::RGBA:
                 return 4;
             case ImageFormat::RGBA16F:
@@ -113,6 +115,7 @@ namespace ImageUtils
             case ImageFormat::RED32F:
             case ImageFormat::RG8:
             case ImageFormat::RGBA:
+            case ImageFormat::BGRA:
             case ImageFormat::RGBA16F:
             case ImageFormat::RGB:
             case ImageFormat::SRGB:
@@ -144,6 +147,8 @@ namespace ImageUtils
                 return VK_FORMAT_R32G32_SFLOAT;
             case ImageFormat::RGBA:
                 return VK_FORMAT_R8G8B8A8_UNORM;
+            case ImageFormat::BGRA:
+                return VK_FORMAT_B8G8R8A8_UNORM;
             case ImageFormat::RGBA16F:
                 return VK_FORMAT_R16G16B16A16_SFLOAT;
             case ImageFormat::RGBA32F:
@@ -155,7 +160,7 @@ namespace ImageUtils
             case ImageFormat::DEPTH32F:
                 return VK_FORMAT_D32_SFLOAT;
             case ImageFormat::DEPTH24STENCIL8:
-                return VK_FORMAT_D32_SFLOAT;    // TODO:: Use device depth format.
+                return VK_FORMAT_D24_UNORM_S8_UINT;    // TODO:: Use device depth format.
         }
         assert(false);
         return VK_FORMAT_UNDEFINED;
@@ -182,8 +187,9 @@ namespace ImageUtils
             case VK_FORMAT_R32G32_SFLOAT:
                 return ImageFormat::RG32F;
             case VK_FORMAT_R8G8B8A8_UNORM:
-            case VK_FORMAT_B8G8R8A8_UNORM:
                 return ImageFormat::RGBA;
+            case VK_FORMAT_B8G8R8A8_UNORM:
+                return ImageFormat::BGRA;
             case VK_FORMAT_R16G16B16A16_SFLOAT:
                 return ImageFormat::RGBA16F;
             case VK_FORMAT_R32G32B32A32_SFLOAT:
@@ -239,7 +245,7 @@ namespace ImageUtils
             VkPipelineStageFlags srcStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
-    void SetImageLayout(
+    void SetImageLayoutAllMips(
             VkCommandBuffer cmdbuffer,
             VkImage image,
             VkImageAspectFlags aspectMask,

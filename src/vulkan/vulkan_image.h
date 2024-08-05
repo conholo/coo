@@ -24,15 +24,25 @@ struct ImageSpecification
     bool CreateSampler = true;
     VkImage ExistingImage = VK_NULL_HANDLE;  // For swapchain images
     VkFormat SwapchainFormat = VK_FORMAT_UNDEFINED;
-    bool InvalidateOnConstruction = false;
 };
+
+enum class ImageStage
+{
+    TopOfPipe,
+    Transfer,
+    FragmentShader,
+    ColorAttachmentOutput,
+    EarlyFragmentTests,
+    AllCommands
+};
+
 
 class VulkanImageView;
 
 class VulkanImage2D
 {
 public:
-    VulkanImage2D(ImageSpecification specification);
+    explicit VulkanImage2D(ImageSpecification specification);
     ~VulkanImage2D();
 
     void Release();
@@ -40,12 +50,16 @@ public:
     void Resize(uint32_t width, uint32_t height);
 
     VulkanImageView* GetView(uint32_t mip = 0);
-
+    void TransitionLayout(VkCommandBuffer cmd, VkImageLayout newLayout, uint32_t baseMipLevel = 0, uint32_t levelCount = VK_REMAINING_MIP_LEVELS);
     const VkDescriptorImageInfo &GetDescriptorInfo(uint32_t mip = 0) const;
-    const ImageSpecification &GetSpecification() const { return m_Specification; }
+    void CopyFromBufferAndGenerateMipmaps(VkBuffer buffer, VkDeviceSize bufferSize, uint32_t mipLevels);
+
+    void SetCurrentLayout(VkImageLayout newLayout) { m_CurrentLayout = newLayout; }
+    const ImageSpecification& Specification() const { return m_Specification; }
+    ImageSpecification& Specification()  { return m_Specification; }
     bool IsSharedConcurrently() const { return m_ConcurrentQueueIndices.size() < 2;}
-    VkImage GetVkImage() const { return m_Image; }
-    VkSampler GetSampler() const { return m_Sampler; }
+    VkImage GetVkImage() { return m_Image; }
+    VkSampler GetSampler() { return m_Sampler; }
 
 private:
     void HandleSwapchainImage();
@@ -53,7 +67,8 @@ private:
     void CreateImageView(uint32_t mip);
     void UpdateImageViews();
     void CreateSampler();
-    void TransitionImageLayout();
+
+    static VkPipelineStageFlags GetVkPipelineStageFlags(ImageStage stage);
 
     VkImageUsageFlags DetermineImageUsageFlags() const;
     void SetupImageSharingMode(VkImageCreateInfo& imageCreateInfo);
@@ -62,7 +77,10 @@ private:
     VkImage m_Image = VK_NULL_HANDLE;
     VkDeviceMemory m_DeviceMemory = VK_NULL_HANDLE;
     VkSampler m_Sampler = VK_NULL_HANDLE;
+    VkImageLayout m_CurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
     std::map<uint32_t, std::unique_ptr<VulkanImageView>> m_MipViews;
+    std::vector<VkImageLayout> m_MipLayouts;
 
     std::vector<uint32_t> m_ConcurrentQueueIndices;
     static void CreateVkImageWithInfo(const VkImageCreateInfo &imageInfo,
@@ -70,6 +88,7 @@ private:
                                       VkImage &image,
                                       VkDeviceMemory &imageMemory);
 };
+
 class VulkanImageView
 {
 public:
@@ -94,6 +113,7 @@ public:
         m_DescriptorImageInfo.imageView = m_ImageView;
         m_DescriptorImageInfo.sampler = sampler;
     }
+
 private:
     VulkanImage2D *m_Image;
     uint32_t m_Mip;

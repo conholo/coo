@@ -245,10 +245,28 @@ VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetVertexInputDesc
 
     m_VertexInputState = {};
     m_VertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    m_VertexInputState.vertexBindingDescriptionCount = static_cast<uint32_t>(m_BindingDescriptions.size());
-    m_VertexInputState.pVertexBindingDescriptions = m_BindingDescriptions.data();
-    m_VertexInputState.vertexAttributeDescriptionCount = static_cast<uint32_t>(m_AttributeDescriptions.size());
-    m_VertexInputState.pVertexAttributeDescriptions = m_AttributeDescriptions.data();
+
+    if (!m_BindingDescriptions.empty())
+    {
+        m_VertexInputState.vertexBindingDescriptionCount = static_cast<uint32_t>(m_BindingDescriptions.size());
+        m_VertexInputState.pVertexBindingDescriptions = m_BindingDescriptions.data();
+    }
+    else
+    {
+        m_VertexInputState.vertexBindingDescriptionCount = 0;
+        m_VertexInputState.pVertexBindingDescriptions = nullptr;
+    }
+
+    if (!m_AttributeDescriptions.empty())
+    {
+        m_VertexInputState.vertexAttributeDescriptionCount = static_cast<uint32_t>(m_AttributeDescriptions.size());
+        m_VertexInputState.pVertexAttributeDescriptions = m_AttributeDescriptions.data();
+    }
+    else
+    {
+        m_VertexInputState.vertexAttributeDescriptionCount = 0;
+        m_VertexInputState.pVertexAttributeDescriptions = nullptr;
+    }
 
     return *this;
 }
@@ -369,4 +387,9 @@ std::unique_ptr<VulkanGraphicsPipeline> VulkanGraphicsPipelineBuilder::Build()
     pipeline->SetRenderPass(m_RenderPass, m_Subpass);
     pipeline->Build();
     return pipeline;
+}
+
+void VulkanGraphicsPipeline::Bind(VkCommandBuffer commandBuffer)
+{
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
 }

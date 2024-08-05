@@ -23,6 +23,8 @@ public:
     void EndFrame(uint32_t frameIndex);
     uint32_t CurrentImageIndex() const { return m_CurrentImageIndex; }
 
+    void CreateSyncObjects();
+
 private:
 
     void CreateDrawCommandBuffers();

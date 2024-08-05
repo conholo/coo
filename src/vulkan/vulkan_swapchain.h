@@ -16,18 +16,14 @@ public:
     void Create();
     void Destroy();
 
-    void Resize(uint32_t width, uint32_t height);
-
     VkResult AcquireNextImage(uint32_t *imageIndex, VkSemaphore imageAvailableSemaphore);
-    void Present(VkSemaphore renderCompleteSemaphore);
-
-    VkFormat ImageFormat() const { return m_SwapchainImageFormat; }
-    VkExtent2D Extent() const { return m_SwapchainExtent; }
 
     VkSwapchainKHR Swapchain() const { return m_Swapchain; }
     uint32_t Width() const { return m_SwapchainExtent.width; }
     uint32_t Height() const { return m_SwapchainExtent.height; }
     uint32_t ImageCount() const { return static_cast<uint32_t>(m_Images.size()); }
+    VkFormat SwapchainImageFormat() const { return m_SwapchainImageFormat; }
+    VkExtent2D Extent() const { return m_SwapchainExtent; }
 
     bool CompareFormats(const VulkanSwapchain& swapchain) const
     {

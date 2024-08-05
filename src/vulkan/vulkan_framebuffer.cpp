@@ -14,7 +14,7 @@ VulkanFramebuffer::~VulkanFramebuffer()
 
 void VulkanFramebuffer::Create(
         VkRenderPass renderPass,
-        const std::vector<VkImageView> &attachments,
+        const std::vector<VkImageView>& attachments,
         uint32_t width, uint32_t height,
         uint32_t layers)
 {

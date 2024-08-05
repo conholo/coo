@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 
 #include "vulkan_image_utils.h"
+#include "vulkan_swapchain.h"
 #include <vector>
 #include <optional>
 #include <string>
@@ -26,6 +27,7 @@ struct AttachmentDescription
     VkAttachmentStoreOp StencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     VkImageLayout InitialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     VkImageLayout FinalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    VkClearValue ClearValue{};
 };
 
 struct SubpassDescription
@@ -50,11 +52,14 @@ public:
             VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask,
             VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask,
             VkDependencyFlags dependencyFlags);
-
     void Build();
+
+    void BeginPass(VkCommandBuffer commandBuffer, VkRenderPassBeginInfo beginInfo, VulkanSwapchain& swapchainRef);
+    void EndPass(VkCommandBuffer commandBuffer);
 
     VkRenderPass RenderPass() const { return m_RenderPass; }
     uint32_t ColorAttachmentCount();
+    static bool FormatIsDepth(ImageFormat format);
 
     const std::vector<AttachmentDescription>& GetAttachmentDescriptions() const { return m_Attachments; }
 
@@ -63,6 +68,7 @@ private:
     std::vector <AttachmentDescription> m_Attachments;
     std::vector <SubpassDescription> m_Subpasses;
     std::vector <VkSubpassDependency> m_Dependencies;
+    std::vector <VkClearValue> m_AttachmentClearValues;
     VkRenderPass m_RenderPass = VK_NULL_HANDLE;
 
     void CreateRenderPass();

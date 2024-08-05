@@ -72,7 +72,8 @@ void VulkanSwapchain::Create()
         createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         createInfo.queueFamilyIndexCount = 2;
         createInfo.pQueueFamilyIndices = queueFamilyIndices;
-    } else
+    }
+    else
     {
         createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         createInfo.queueFamilyIndexCount = 0;      // Optional
@@ -106,18 +107,8 @@ void VulkanSwapchain::Create()
         spec.Usage = ImageUsage::Swapchain;
         spec.ExistingImage = swapChainImages[i];
         spec.SwapchainFormat = m_SwapchainImageFormat;
-
         m_Images[i] = std::make_shared<VulkanImage2D>(spec);
     }
-}
-
-void VulkanSwapchain::Resize(uint32_t width, uint32_t height)
-{
-    m_SwapchainExtent.width = width;
-    m_SwapchainExtent.height = height;
-
-    Destroy();
-    Create();
 }
 
 VkResult VulkanSwapchain::AcquireNextImage(uint32_t *imageIndex, VkSemaphore imageAvailableSemaphore)
@@ -131,19 +122,6 @@ VkResult VulkanSwapchain::AcquireNextImage(uint32_t *imageIndex, VkSemaphore ima
             imageIndex);
 
     return result;
-}
-
-void VulkanSwapchain::Present(VkSemaphore renderCompleteSemaphore)
-{
-    VkPresentInfoKHR presentInfo{};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &renderCompleteSemaphore;
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &m_Swapchain;
-    presentInfo.pImageIndices = &m_CurrentImageIndex;
-
-    VK_CHECK_RESULT(vkQueuePresentKHR(VulkanContext::Get().GraphicsQueue(), &presentInfo));
 }
 
 VkSurfaceFormatKHR VulkanSwapchain::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats)

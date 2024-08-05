@@ -1,128 +1,137 @@
 #pragma once
-#include <stdint.h>
+#include <cstddef>
 #include <cstring>
-#include <cassert>
+#include <memory>
+#include <stdexcept>
+#include <type_traits>
 
-using byte = uint8_t;
+class Buffer {
+public:
+    Buffer() noexcept = default;
+    explicit Buffer(std::size_t size) { Allocate(size); }
+    Buffer(const void* data, std::size_t size) { Allocate(size); Write(data, size); }
 
-struct Buffer
-{
-    void* Data;
-    uint64_t Size;
+    Buffer(const Buffer&) = delete;
+    Buffer& operator=(const Buffer&) = delete;
 
-    Buffer()
-            : Data(nullptr), Size(0)
+    Buffer(Buffer&& other) noexcept
+            : m_Data(std::move(other.m_Data)), m_Size(other.m_Size)
     {
+        other.m_Size = 0;
     }
 
-    Buffer(const void* data, uint64_t size = 0)
-            : Data((void*)data), Size(size)
-    {
+    Buffer& operator=(Buffer&& other) noexcept {
+        if (this != &other) {
+            m_Data = std::move(other.m_Data);
+            m_Size = other.m_Size;
+            other.m_Size = 0;
+        }
+        return *this;
     }
 
-    static Buffer Copy(const Buffer& other)
-    {
-        Buffer buffer;
-        buffer.Allocate(other.Size);
-        memcpy(buffer.Data, other.Data, other.Size);
+    ~Buffer() = default;
+
+    static Buffer Copy(const Buffer& other) {
+        Buffer buffer(other.m_Size);
+        std::memcpy(buffer.Data(), other.Data(), other.m_Size);
         return buffer;
     }
 
-    static Buffer Copy(const void* data, uint64_t size)
-    {
-        Buffer buffer;
-        buffer.Allocate(size);
-        memcpy(buffer.Data, data, size);
+    static Buffer Copy(const void* data, std::size_t size) {
+        Buffer buffer(size);
+        std::memcpy(buffer.Data(), data, size);
         return buffer;
     }
 
-    void Allocate(uint64_t size)
-    {
-        delete[] (byte*)Data;
-        Data = nullptr;
-
-        if (size == 0)
-            return;
-
-        Data = new byte[size];
-        Size = size;
+    void Allocate(std::size_t size) {
+        m_Data.reset(new uint8_t[size]);
+        m_Size = size;
     }
 
-    void Release()
+    void Release() noexcept
     {
-        delete[] (byte*)Data;
-        Data = nullptr;
-        Size = 0;
+        m_Data.reset();
+        m_Size = 0;
     }
 
-    void ZeroInitialize() const
+    void ZeroInitialize() const noexcept
     {
-        if (Data)
-            memset(Data, 0, Size);
+        if (m_Data)
+        {
+            std::memset(m_Data.get(), 0, m_Size);
+        }
     }
 
     template<typename T>
-    T& Read(uint64_t offset = 0)
+    T& Read(std::size_t offset = 0)
     {
-        return *(T*)((byte*)Data + offset);
+        if (offset + sizeof(T) > m_Size)
+        {
+            throw std::out_of_range("Buffer overflow in Read");
+        }
+        return *reinterpret_cast<T*>(m_Data.get() + offset);
     }
 
     template<typename T>
-    const T& Read(uint64_t offset = 0) const
+    const T& Read(std::size_t offset = 0) const
     {
-        return *(T*)((byte*)Data + offset);
+        if (offset + sizeof(T) > m_Size)
+        {
+            throw std::out_of_range("Buffer overflow in Read");
+        }
+        return *reinterpret_cast<const T*>(m_Data.get() + offset);
     }
 
-    [[nodiscard]] byte* ReadBytes(uint64_t size, uint64_t offset) const
+    std::unique_ptr<uint8_t[]> ReadBytes(std::size_t size, std::size_t offset) const
     {
-        assert(offset + size <= Size && "Buffer overflow!");
-        byte* buffer = new byte[size];
-        memcpy(buffer, (byte*)Data + offset, size);
+        if (offset + size > m_Size)
+        {
+            throw std::out_of_range("Buffer overflow in ReadBytes");
+        }
+        auto buffer = std::make_unique<uint8_t[]>(size);
+        std::memcpy(buffer.get(), m_Data.get() + offset, size);
         return buffer;
     }
 
-    void Write(const void* data, uint64_t size, uint64_t offset = 0)
+    void Write(const void* data, std::size_t size, std::size_t offset = 0)
     {
-        assert(offset + size <= Size && "Buffer overflow!");
-        memcpy((byte*)Data + offset, data, size);
+        if (offset + size > m_Size)
+        {
+            throw std::out_of_range("Buffer overflow in Write");
+        }
+        std::memcpy(m_Data.get() + offset, data, size);
     }
 
-    explicit operator bool() const
+    explicit operator bool() const noexcept { return static_cast<bool>(m_Data); }
+
+    uint8_t& operator[](std::size_t index)
     {
-        return Data;
+        if (index >= m_Size)
+        {
+            throw std::out_of_range("Buffer index out of range");
+        }
+        return m_Data[index];
     }
 
-    byte& operator[](int index)
+    uint8_t operator[](std::size_t index) const
     {
-        return ((byte*)Data)[index];
-    }
-
-    byte operator[](int index) const
-    {
-        return ((byte*)Data)[index];
+        if (index >= m_Size) {
+            throw std::out_of_range("Buffer index out of range");
+        }
+        return m_Data[index];
     }
 
     template<typename T>
-    T* As() const
+    T* As() const noexcept
     {
-        return (T*)Data;
+        return reinterpret_cast<T*>(m_Data.get());
     }
 
-    [[nodiscard]] inline uint64_t GetSize() const { return Size; }
-};
+    std::size_t GetSize() const noexcept { return m_Size; }
+    uint8_t* Data() noexcept { return m_Data.get(); }
+    const uint8_t* Data() const noexcept { return m_Data.get(); }
 
-struct BufferSafe : public Buffer
-{
-    ~BufferSafe()
-    {
-        Release();
-    }
-
-    static BufferSafe Copy(const void* data, uint64_t size)
-    {
-        BufferSafe buffer;
-        buffer.Allocate(size);
-        memcpy(buffer.Data, data, size);
-        return buffer;
-    }
+private:
+    std::unique_ptr<uint8_t[]> m_Data;
+    std::size_t m_Size = 0;
 };

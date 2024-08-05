@@ -35,11 +35,11 @@ public:
     void SetDepthStencilState(const VkPipelineDepthStencilStateCreateInfo& depthStencilState);
     void SetColorBlendState(const VkPipelineColorBlendStateCreateInfo& colorBlendState,
                             std::vector<VkPipelineColorBlendAttachmentState>&& colorBlendAttachments);
-    void SetDynamicState(const VkPipelineDynamicStateCreateInfo& dynamicState,
-                         std::vector<VkDynamicState>&& dynamicStates);
+    void SetDynamicState(const VkPipelineDynamicStateCreateInfo& dynamicState, std::vector<VkDynamicState>&& dynamicStates);
     void SetLayout(VkPipelineLayout layout);
     void SetRenderPass(VkRenderPass renderPass, uint32_t subpass = 0);
 
+    void Bind(VkCommandBuffer commandBuffer);
     void Build();
     VkPipeline GetPipeline() const { return m_Pipeline; }
 
@@ -70,7 +70,7 @@ public:
     explicit VulkanGraphicsPipelineBuilder(std::string debugName = "GraphicsPipeline");
 
     VulkanGraphicsPipelineBuilder& SetShaders(const std::shared_ptr<VulkanShader>& vertexShader, const std::shared_ptr<VulkanShader>& fragmentShader);
-    VulkanGraphicsPipelineBuilder& SetVertexInputDescription(const VertexInputDescription& description);
+    VulkanGraphicsPipelineBuilder& SetVertexInputDescription(const VertexInputDescription& description = VertexInputDescription());
     VulkanGraphicsPipelineBuilder& SetPrimitiveTopology(VkPrimitiveTopology topology);
     VulkanGraphicsPipelineBuilder& SetPolygonMode(VkPolygonMode mode);
     VulkanGraphicsPipelineBuilder& SetCullMode(VkCullModeFlags cullMode, VkFrontFace frontFace);

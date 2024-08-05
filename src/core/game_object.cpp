@@ -1,5 +1,7 @@
 #include <numeric>
 #include "game_object.h"
+#include "frame_info.h"
+#include "scene.h"
 #include "vulkan/vulkan_context.h"
 
 
@@ -70,50 +72,46 @@ glm::mat3 TransformComponent::NormalMatrix() const
 
 VkDescriptorBufferInfo GameObject::GetBufferInfo(int frameIndex)
 {
-    return m_GameObjectManger.GetBufferInfoForGameObject(frameIndex, m_Id);
+    return m_Scene.GetBufferInfoForGameObject(frameIndex, m_Id);
 }
 
-GameObject& GameObjectManager::MakePointLight(float intensity, float radius, glm::vec3 color)
+void GameObject::Render(FrameInfo& frameInfo)
 {
-    GameObject& obj = CreateGameObject();
-    obj.Color = color;
-    obj.ObjectTransform.Scale.x = radius;
-    obj.PointLightComp = std::make_unique<PointLightComponent>();
-    obj.PointLightComp->LightIntensity = intensity;
-    return obj;
-}
-
-void GameObjectManager::UpdateBuffer(int frameIndex)
-{
-    // copy model matrix and normal matrix for each gameObj into
-    // buffer for this frame
-    for(auto& entry: GameObjects)
+    Material->UpdateDescriptorSets(frameInfo.FrameIndex,
     {
-        auto& obj = entry.second;
-        GameObjectBufferData data{};
-        data.ModelMatrix = obj.ObjectTransform.Mat4();
-        data.NormalMatrix = glm::mat4(obj.ObjectTransform.NormalMatrix());
-        m_GameObjectUboBuffers[frameIndex]->WriteToIndex(&data, entry.first);
-    }
+       {0,
+           {
+               {
+                   .binding = 0,
+                   .type = DescriptorUpdate::Type::Buffer,
+                   .bufferInfo =  frameInfo.GlobalUbo->DescriptorInfo()
+               }
+           }
+       },
+       {1,
+            {
+               {
+                   .binding = 0,
+                   .type = DescriptorUpdate::Type::Buffer,
+                   .bufferInfo = GetBufferInfo(frameInfo.FrameIndex)
+               },
+               {
+                   .binding = 1,
+                   .type = DescriptorUpdate::Type::Image,
+                   .imageInfo = DiffuseMap->GetDescriptorInfo()
+               },
+               {
+                   .binding = 2,
+                   .type = DescriptorUpdate::Type::Image,
+                   .imageInfo = NormalMap->GetDescriptorInfo()
+               }
+           }
+       }
+   });
 
-    m_GameObjectUboBuffers[frameIndex]->Flush();
+    Material->BindDescriptors(frameInfo.FrameIndex, frameInfo.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS);
+    Material->BindPushConstants(frameInfo.CommandBuffer);
+    ObjectModel->BindVertexInput(frameInfo.CommandBuffer);
+    ObjectModel->Draw(frameInfo.CommandBuffer);
 }
 
-GameObjectManager::GameObjectManager()
-{
-    // including nonCoherentAtomSize allows us to flush a specific index at once
-    int alignment = std::lcm(
-        VulkanContext::Get().PhysicalDeviceProperties().limits.nonCoherentAtomSize,
-        VulkanContext::Get().PhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment);
-
-    for (auto& uboBuffer : m_GameObjectUboBuffers)
-    {
-        uboBuffer = std::make_unique<VulkanBuffer>(
-            sizeof(GameObjectBufferData),
-            GameObjectManager::MAX_GAME_OBJECTS,
-            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            alignment);
-        uboBuffer->Map();
-    }
-}

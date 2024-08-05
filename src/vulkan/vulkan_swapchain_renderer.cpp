@@ -8,6 +8,7 @@ VulkanSwapchainRenderer::VulkanSwapchainRenderer(Window &windowRef)
 {
     RecreateSwapchain();
     CreateDrawCommandBuffers();
+    CreateSyncObjects();
 }
 
 VulkanSwapchainRenderer::~VulkanSwapchainRenderer()
@@ -28,7 +29,8 @@ void VulkanSwapchainRenderer::RecreateSwapchain()
     if (m_Swapchain == nullptr)
     {
         m_Swapchain = std::make_unique<VulkanSwapchain>(extent);
-    } else
+    }
+    else
     {
         std::shared_ptr<VulkanSwapchain> oldSwapChain = std::move(m_Swapchain);
         m_Swapchain = std::make_unique<VulkanSwapchain>(extent, oldSwapChain);
@@ -147,5 +149,31 @@ void VulkanSwapchainRenderer::EndFrame(uint32_t frameIndex)
     else if (result != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to present swapchain imageInfo!");
+    }
+}
+
+void VulkanSwapchainRenderer::CreateSyncObjects()
+{
+    auto device = VulkanContext::Get().Device();
+    m_PresentCompleteSemaphores.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
+    m_RenderFinishedSemaphores.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
+    m_InFlightFences.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
+    m_ImagesInFlight.resize(m_Swapchain->ImageCount(), VK_NULL_HANDLE);
+
+    VkSemaphoreCreateInfo semaphoreInfo = {};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkFenceCreateInfo fenceInfo = {};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    for (size_t i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &m_PresentCompleteSemaphores[i]) != VK_SUCCESS ||
+            vkCreateSemaphore(device, &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
+            vkCreateFence(device, &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to create synchronization objects for a frame!");
+        }
     }
 }

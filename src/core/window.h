@@ -1,41 +1,56 @@
 #pragma once
+#include "core/event/event.h"
 
 #include <string>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <functional>
+
+struct WindowProperties
+{
+    std::string Title{};
+    uint32_t	Width;
+    uint32_t	Height;
+
+    explicit WindowProperties(std::string title = "coo", uint32_t width = 800, uint32_t height = 600)
+            : Title(std::move(title)), Width(width), Height(height) {}
+};
+
 
 class Window
 {
 public:
-    Window(int width, int height, std::string name);
+    using EventCallbackFn = std::function<void(Event&)>;
+
+    explicit Window(const WindowProperties& props = WindowProperties());
     ~Window();
 
     Window(const Window&) = delete;
     Window& operator=(const Window&) = delete;
 
     bool ShouldClose() { return glfwWindowShouldClose(m_WindowHandle); }
-    [[nodiscard]] VkExtent2D GetExtent() const { return { static_cast<uint32_t>(m_Width), static_cast<uint32_t>(m_Height)}; }
+    VkExtent2D GetExtent() const { return { static_cast<uint32_t>(m_Data.Width), static_cast<uint32_t>(m_Data.Height)}; }
 
-    [[nodiscard]] bool WasWindowResized() const { return m_FramebufferResized; }
-    void ResetWindowResizedFlag() { m_FramebufferResized = false; }
+    bool WasWindowResized() const { return m_Data.WasWindowResized; }
+    void ResetWindowResizedFlag() { m_Data.WasWindowResized = false; }
 
     void CreateWindowSurface(VkInstance instance, VkSurfaceKHR* outSurface);
-    static void FramebufferResizeCallback(GLFWwindow *window, int width, int height);
-    static void OnMouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
-    static void OnScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
-    static void OnMouseMoveCallback(GLFWwindow* window, double xpos, double ypos);
-
-    [[nodiscard]] GLFWwindow* GetGLFWwindow() const { return m_WindowHandle; }
+    void SetEventCallback(const EventCallbackFn& callback) { m_Data.Callback = callback; }
 
 private:
+    void Initialize(const WindowProperties& props);
 
-    void InitializeWindow();
-
-    bool m_FramebufferResized = false;
-    int m_Width;
-    int m_Height;
-
-    std::string m_WindowName;
     GLFWwindow* m_WindowHandle{};
+
+    struct WindowData
+    {
+        std::string	 Title;
+        unsigned int Width, Height;
+        bool WasWindowResized = false;
+
+        EventCallbackFn Callback;
+    };
+
+    WindowData m_Data;
 };

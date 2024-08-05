@@ -68,6 +68,11 @@ void VulkanRenderer::Render(FrameInfo& frameInfo)
     }
 }
 
+void VulkanRenderer::PrepareGameObjectForRendering(GameObject &gameObjectRef)
+{
+    m_DeferredRenderer->RegisterGameObject(gameObjectRef);
+}
+
 void VulkanRenderer::OnSwapchainRecreate(uint32_t width, uint32_t height)
 {
     m_DeferredRenderer->Resize(width, height);

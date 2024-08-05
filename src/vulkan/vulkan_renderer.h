@@ -17,6 +17,9 @@ public:
     void Render(FrameInfo& frameInfo);
     void Shutdown();
 
+    void PrepareGameObjectForRendering(GameObject& gameObjectRef);
+    uint32_t GetCurrentSwapchainImageIndex() const { return m_SwapchainRenderer->CurrentImageIndex(); }
+
     VulkanSwapchain& VulkanSwapchain() const { return m_SwapchainRenderer->GetSwapchain(); }
 
 private:

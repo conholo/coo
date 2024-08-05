@@ -2,12 +2,16 @@
 
 #include "vulkan/vulkan_model.h"
 #include "vulkan/vulkan_swapchain.h"
+#include "vulkan/vulkan_material.h"
+#include "vulkan/renderable_interfaces.h"
+#include "vulkan/vulkan_texture.h"
 
 #include <memory>
 #include <unordered_map>
 #include <glm/gtc/matrix_transform.hpp>
 
-class GameObjectManager;
+class FrameInfo;
+class Scene;
 
 struct TransformComponent
 {
@@ -30,7 +34,7 @@ struct GameObjectBufferData
     glm::mat4 NormalMatrix{1.0f};
 };
 
-class GameObject
+class GameObject : public IRenderable
 {
 public:
     using id_t = unsigned int;
@@ -41,62 +45,28 @@ public:
     GameObject(GameObject&&) = default;
     GameObject&operator=(GameObject &&) = delete;
 
-    [[nodiscard]] id_t GetId() const { return m_Id; }
+    void Render(FrameInfo& frameInfo) override;
+
+    id_t GetId() const { return m_Id; }
 
     VkDescriptorBufferInfo GetBufferInfo(int frameIndex);
 
     glm::vec3 Color{};
     TransformComponent ObjectTransform{};
 
-    std::shared_ptr<VulkanImage2D> DiffuseMap = nullptr;
-    std::shared_ptr<VulkanImage2D> NormalMap = nullptr;
-    std::shared_ptr<VulkanModel> ObjectModel{};
+    std::shared_ptr<VulkanMaterial> Material = nullptr;
+    std::shared_ptr<VulkanTexture2D> DiffuseMap = nullptr;
+    std::shared_ptr<VulkanTexture2D> NormalMap = nullptr;
+    std::shared_ptr<VulkanModel> ObjectModel = nullptr;
     std::unique_ptr<PointLightComponent> PointLightComp = nullptr;
 
 private:
 
-    explicit GameObject(id_t objectId, const GameObjectManager& gameObjectManager )
-        :m_Id(objectId), m_GameObjectManger(gameObjectManager) { }
+    explicit GameObject(id_t objectId, const Scene& gameObjectManager )
+        : m_Id(objectId), m_Scene(gameObjectManager) { }
 
     id_t m_Id;
-    const GameObjectManager& m_GameObjectManger;
+    const Scene& m_Scene;
 
-    friend class GameObjectManager;
-};
-
-class GameObjectManager
-{
-public:
-    static constexpr int MAX_GAME_OBJECTS = 1000;
-
-    explicit GameObjectManager();
-    GameObjectManager(const GameObjectManager&) = delete;
-
-    GameObjectManager& operator=(const GameObjectManager&) = delete;
-    GameObjectManager(GameObjectManager&&) = delete;
-    GameObjectManager& operator=(GameObjectManager&&) = delete;
-
-    GameObject& CreateGameObject()
-    {
-        assert(m_CurrentId < MAX_GAME_OBJECTS && "Max game object count exceeded!");
-        auto gameObject = GameObject{m_CurrentId++, *this};
-        auto gameObjectId = gameObject.GetId();
-        GameObjects.emplace(gameObjectId, std::move(gameObject));
-        return GameObjects.at(gameObjectId);
-    }
-
-    GameObject& MakePointLight(float intensity = 10.f, float radius = 0.1f, glm::vec3 color = glm::vec3(1.0f));
-
-    VkDescriptorBufferInfo GetBufferInfoForGameObject(size_t frameIndex, GameObject::id_t gameObjectId) const
-    {
-        return m_GameObjectUboBuffers[frameIndex]->DescriptorInfo(gameObjectId);
-    }
-
-    void UpdateBuffer(int frameIndex);
-
-    GameObject::Map GameObjects{};
-    std::vector<std::unique_ptr<VulkanBuffer>> m_GameObjectUboBuffers{VulkanSwapchain::MAX_FRAMES_IN_FLIGHT};
-
-private:
-    GameObject::id_t m_CurrentId = 0;
+    friend class Scene;
 };

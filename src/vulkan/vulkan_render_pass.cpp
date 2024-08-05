@@ -1,8 +1,10 @@
 #include "vulkan_render_pass.h"
 
-#include <utility>
 #include "vulkan_context.h"
 #include "vulkan_utils.h"
+
+#include <vector>
+#include <utility>
 
 VulkanRenderPass::VulkanRenderPass(std::string debugName)
     : m_DebugName(std::move(debugName))
@@ -129,4 +131,40 @@ uint32_t VulkanRenderPass::ColorAttachmentCount()
             counter++;
     }
     return counter;
+}
+
+void VulkanRenderPass::BeginPass(VkCommandBuffer commandBuffer, VkRenderPassBeginInfo beginInfo, VulkanSwapchain& swapchainRef)
+{
+    if(m_AttachmentClearValues.size() != m_Attachments.size())
+        m_AttachmentClearValues.resize(m_Attachments.size());
+
+    for(int i = 0; i < m_Attachments.size(); ++i)
+        m_AttachmentClearValues[i] = m_Attachments[i].ClearValue;
+
+    beginInfo.pClearValues = m_AttachmentClearValues.data();
+    beginInfo.clearValueCount = m_AttachmentClearValues.size();
+
+    vkCmdBeginRenderPass(commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(swapchainRef.Extent().width);
+    viewport.height = static_cast<float>(swapchainRef.Extent().height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    VkRect2D scissor{{0, 0}, swapchainRef.Extent()};
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+}
+
+void VulkanRenderPass::EndPass(VkCommandBuffer commandBuffer)
+{
+    vkCmdEndRenderPass(commandBuffer);
+}
+
+bool VulkanRenderPass::FormatIsDepth(ImageFormat format)
+{
+    VkFormat vkFormat = ImageUtils::VulkanImageFormat(format);
+    return vkFormat == VK_FORMAT_D32_SFLOAT || vkFormat == VK_FORMAT_D32_SFLOAT_S8_UINT || vkFormat == VK_FORMAT_D24_UNORM_S8_UINT;
 }

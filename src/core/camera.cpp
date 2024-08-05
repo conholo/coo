@@ -1,4 +1,6 @@
 #include "camera.h"
+#include "core/event/mouse_event.h"
+#include "core/engine_utils.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/constants.hpp>
@@ -73,13 +75,6 @@ void Camera::UpdateView()
     m_InvViewMatrix[3][2] = eye.z;
 }
 
-void Camera::OnScroll(double/* xoffset*/, double yoffset)
-{
-    m_CurrentInputState.Zoom += DragState::ScrollSensitivity * static_cast<float>(yoffset);
-    m_CurrentInputState.Zoom = glm::clamp(m_CurrentInputState.Zoom, -3.0f, 2.0f);
-    UpdateView();
-}
-
 void Camera::Tick(float deltaTime)
 {
     constexpr float eps = 1e-4f;
@@ -102,30 +97,33 @@ void Camera::Tick(float deltaTime)
     UpdateView();
 }
 
-
-void Camera::OnMouseButton(int button, int action, int /* modifiers */, double cursorX, double cursorY)
+bool Camera::OnMouseButtonPressed(MouseButtonPressedEvent& pressedEvent)
 {
-    if (button == GLFW_MOUSE_BUTTON_LEFT)
+    if (pressedEvent.GetButton() == GLFW_MOUSE_BUTTON_LEFT)
     {
-        switch (action)
-        {
-            case GLFW_PRESS:
-                m_DragState.Active = true;
-                m_DragState.StartMouse = glm::vec2(-static_cast<float>(cursorX), static_cast<float>(cursorY));
-                m_DragState.StartInputState = m_CurrentInputState;
-                break;
-            case GLFW_RELEASE:
-                m_DragState.Active = false;
-                break;
-        }
+        m_DragState.Active = true;
+        m_DragState.StartMouse = glm::vec2(-static_cast<float>(pressedEvent.GetMouseX()), static_cast<float>(pressedEvent.GetMouseY()));
+        m_DragState.StartInputState = m_CurrentInputState;
     }
+
+    return false;
 }
 
-void Camera::OnMouseMove(double xpos, double ypos)
+bool Camera::OnMouseButtonReleased(MouseButtonReleasedEvent& releasedEvent)
 {
-    if(!m_DragState.Active) return;
+    if (releasedEvent.GetButton() == GLFW_MOUSE_BUTTON_LEFT)
+    {
+        m_DragState.Active = false;
+    }
 
-    glm::vec2 currentMouse = glm::vec2(-static_cast<float>(xpos), static_cast<float>(ypos));
+    return false;
+}
+
+bool Camera::OnMouseMove(MouseMovedEvent& mouseMovedEvent)
+{
+    if(!m_DragState.Active) return false;
+
+    glm::vec2 currentMouse = glm::vec2(-static_cast<float>(mouseMovedEvent.GetXPosition()), static_cast<float>(mouseMovedEvent.GetYPosition()));
     glm::vec2 delta = (currentMouse - m_DragState.StartMouse) * DragState::Sensitivity;
 
     m_CurrentInputState.Angles = m_DragState.StartInputState.Angles + delta;
@@ -138,4 +136,24 @@ void Camera::OnMouseMove(double xpos, double ypos)
 
     m_DragState.Velocity = delta - m_DragState.PreviousDelta;
     m_DragState.PreviousDelta = delta;
+
+    return false;
+}
+
+bool Camera::OnScroll(MouseScrolledEvent& mouseScrolledEvent)
+{
+    m_CurrentInputState.Zoom += DragState::ScrollSensitivity * static_cast<float>(mouseScrolledEvent.GetYOffset());
+    m_CurrentInputState.Zoom = glm::clamp(m_CurrentInputState.Zoom, -3.0f, 2.0f);
+    UpdateView();
+    return false;
+}
+
+void Camera::OnEvent(Event &event)
+{
+    std::cout << "Prorcessng Event" << "\n";
+    EventDispatcher dispatcher(event);
+    dispatcher.Dispatch<MouseScrolledEvent>(BIND_FN(Camera::OnScroll));
+    dispatcher.Dispatch<MouseMovedEvent>(BIND_FN(Camera::OnMouseMove));
+    dispatcher.Dispatch<MouseButtonPressedEvent>(BIND_FN(Camera::OnMouseButtonPressed));
+    dispatcher.Dispatch<MouseButtonReleasedEvent>(BIND_FN(Camera::OnMouseButtonReleased));
 }

@@ -127,3 +127,18 @@ inline const char* VkObjectTypeToString(const VkObjectType type)
         assert(res == VK_SUCCESS);																		\
     }																									\
 }
+
+inline void SetDebugUtilsObjectName(VkDevice device, VkObjectType objectType, uint64_t objectHandle, const char* name)
+{
+    VkDebugUtilsObjectNameInfoEXT nameInfo = {};
+    nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+    nameInfo.objectType = objectType;
+    nameInfo.objectHandle = objectHandle;
+    nameInfo.pObjectName = name;
+
+    auto func = (PFN_vkSetDebugUtilsObjectNameEXT) vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
+    if (func != nullptr)
+    {
+        func(device, &nameInfo);
+    }
+}
