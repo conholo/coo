@@ -11,7 +11,9 @@ VulkanRenderer::VulkanRenderer(Window &window)
                 {
                     OnSwapchainRecreate(width, height);
                 });
-    m_DeferredRenderer = std::make_unique<VulkanDeferredRenderer>(this);
+    //m_DeferredRenderer = std::make_unique<VulkanDeferredRenderer>(this);
+
+    m_SimpleRenderer = std::make_unique<VulkanSimpleRenderer>(this);
 }
 
 VulkanRenderer::~VulkanRenderer()
@@ -31,7 +33,8 @@ void VulkanRenderer::Initialize()
         uboBuffer->Map();
     }
 
-    m_DeferredRenderer->Initialize();
+    //m_DeferredRenderer->Initialize();
+    m_SimpleRenderer->Initialize();
 }
 
 void VulkanRenderer::Render(FrameInfo& frameInfo)
@@ -60,7 +63,8 @@ void VulkanRenderer::Render(FrameInfo& frameInfo)
 
         vkBeginCommandBuffer(cmd, &beginInfo);
 
-        m_DeferredRenderer->Render(frameInfo);
+        //m_DeferredRenderer->Render(frameInfo);
+        m_SimpleRenderer->Render(frameInfo);
 
         vkEndCommandBuffer(cmd);
 
@@ -70,12 +74,13 @@ void VulkanRenderer::Render(FrameInfo& frameInfo)
 
 void VulkanRenderer::PrepareGameObjectForRendering(GameObject &gameObjectRef)
 {
-    m_DeferredRenderer->RegisterGameObject(gameObjectRef);
+    //m_DeferredRenderer->RegisterGameObject(gameObjectRef);
 }
 
 void VulkanRenderer::OnSwapchainRecreate(uint32_t width, uint32_t height)
 {
-    m_DeferredRenderer->Resize(width, height);
+    //m_DeferredRenderer->Resize(width, height);
+    m_SimpleRenderer->Resize(width, height);
 }
 
 void VulkanRenderer::Shutdown()

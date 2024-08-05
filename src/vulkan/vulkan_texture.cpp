@@ -31,6 +31,31 @@ std::shared_ptr<VulkanTexture2D> VulkanTexture2D::CreateAttachment(const Texture
     return texture;
 }
 
+bool VulkanTexture2D::HasMipmaps() const
+{
+    return m_Image && m_Image->GetSpecification().Mips > 1;
+}
+
+VkImageLayout VulkanTexture2D::GetCurrentLayout() const
+{
+    return m_Image ? m_Image->GetCurrentLayout() : VK_IMAGE_LAYOUT_UNDEFINED;
+}
+
+VkImage VulkanTexture2D::GetVkImage() const
+{
+    return m_Image ? m_Image->GetVkImage() : VK_NULL_HANDLE;
+}
+
+void VulkanTexture2D::Release()
+{
+    if (m_Image)
+    {
+        m_Image.reset();
+    }
+    m_ImageData.Release();
+    m_DescriptorInfo = {};
+}
+
 VulkanTexture2D::VulkanTexture2D(TextureSpecification specification)
         : m_Specification(std::move(specification))
 {
@@ -66,12 +91,6 @@ VulkanTexture2D& VulkanTexture2D::operator=(VulkanTexture2D&& other) noexcept
     return *this;
 }
 
-void VulkanTexture2D::Release()
-{
-    m_Image.reset();
-    m_ImageData.Release();
-    m_DescriptorInfo = {};
-}
 
 void VulkanTexture2D::Invalidate(bool release)
 {
@@ -82,9 +101,14 @@ void VulkanTexture2D::Invalidate(bool release)
     {
         CreateAttachmentImage();
     }
-    else
+    else if (!m_ImageData.IsEmpty())
     {
         CreateTextureImage();
+    }
+    else
+    {
+        // For textures without initial data (e.g., render targets)
+        CreateEmptyTextureImage();
     }
 
     UpdateDescriptorInfo();
@@ -130,29 +154,49 @@ void VulkanTexture2D::LoadFromFile(const std::string& filepath)
 
 void VulkanTexture2D::LoadFromMemory(const Buffer& data)
 {
-    int width, height, channels;
-    stbi_set_flip_vertically_on_load(1);
-    void* imageData = nullptr;
-
-    if (stbi_is_hdr_from_memory(static_cast<const stbi_uc*>(data.Data()), static_cast<int>(data.GetSize())))
+    // Check if the data is in a format STB Image can recognize
+    if (stbi_is_hdr_from_memory(static_cast<const stbi_uc*>(data.Data()), static_cast<int>(data.GetSize())) ||
+        stbi_info_from_memory(static_cast<const stbi_uc*>(data.Data()), static_cast<int>(data.GetSize()), nullptr, nullptr, nullptr))
     {
-        imageData = stbi_loadf_from_memory(static_cast<const stbi_uc*>(data.Data()), static_cast<int>(data.GetSize()), &width, &height, &channels, 4);
-        m_Specification.Format = ImageFormat::RGBA32F;
+        // It's a compressed image format, use STB Image to load it
+        int width, height, channels;
+        stbi_set_flip_vertically_on_load(1);
+        void* imageData = nullptr;
+
+        if (stbi_is_hdr_from_memory(static_cast<const stbi_uc*>(data.Data()), static_cast<int>(data.GetSize())))
+        {
+            imageData = stbi_loadf_from_memory(static_cast<const stbi_uc*>(data.Data()), static_cast<int>(data.GetSize()), &width, &height, &channels, 4);
+            m_Specification.Format = ImageFormat::RGBA32F;
+        }
+        else
+        {
+            imageData = stbi_load_from_memory(static_cast<const stbi_uc*>(data.Data()), static_cast<int>(data.GetSize()), &width, &height, &channels, 4);
+            m_Specification.Format = ImageFormat::RGBA;
+        }
+
+        if (!imageData)
+            throw std::runtime_error("Failed to load image from memory");
+
+        m_Specification.Width = width;
+        m_Specification.Height = height;
+
+        m_ImageData = Buffer::Copy(imageData, width * height * 4 * (m_Specification.Format == ImageFormat::RGBA32F ? sizeof(float) : sizeof(uint8_t)));
+        stbi_image_free(imageData);
     }
     else
     {
-        imageData = stbi_load_from_memory(static_cast<const stbi_uc*>(data.Data()), static_cast<int>(data.GetSize()), &width, &height, &channels, 4);
-        m_Specification.Format = ImageFormat::RGBA;
+        // It's raw pixel data, use it directly
+        if (m_Specification.Width == 0 || m_Specification.Height == 0 || m_Specification.Format == ImageFormat::None)
+            throw std::runtime_error("Texture specification is incomplete for raw pixel data");
+
+        size_t expectedSize = m_Specification.Width * m_Specification.Height * 4 *
+                              (m_Specification.Format == ImageFormat::RGBA32F ? sizeof(float) : sizeof(uint8_t));
+
+        if (data.GetSize() != expectedSize)
+            throw std::runtime_error("Raw pixel data size doesn't match the specified dimensions and format");
+
+        m_ImageData = Buffer::Copy(data.Data(), data.GetSize());
     }
-
-    if (!imageData)
-        throw std::runtime_error("Failed to load image from memory");
-
-    m_Specification.Width = width;
-    m_Specification.Height = height;
-
-    m_ImageData = Buffer::Copy(imageData, width * height * 4 * (m_Specification.Format == ImageFormat::RGBA32F ? sizeof(float) : sizeof(uint8_t)));
-    stbi_image_free(imageData);
 }
 
 void VulkanTexture2D::CreateTextureImage()
@@ -195,6 +239,24 @@ void VulkanTexture2D::CreateAttachmentImage()
     m_Image = std::make_unique<VulkanImage2D>(imageSpec);
 }
 
+void VulkanTexture2D::CreateEmptyTextureImage()
+{
+    ImageSpecification imageSpec;
+    imageSpec.Format = m_Specification.Format;
+    imageSpec.Width = m_Specification.Width;
+    imageSpec.Height = m_Specification.Height;
+    imageSpec.Usage = ImageUsage::Texture;
+    imageSpec.Mips = m_Specification.GenerateMips ? ImageUtils::CalculateMipCount(m_Specification.Width, m_Specification.Height) : 1;
+    imageSpec.DebugName = m_Specification.DebugName;
+
+    m_Image = std::make_unique<VulkanImage2D>(imageSpec);
+
+    // Transition the image to a shader read optimal layout
+    VkCommandBuffer commandBuffer = VulkanContext::Get().BeginSingleTimeCommands();
+    m_Image->TransitionLayout(commandBuffer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    VulkanContext::Get().EndSingleTimeCommand(commandBuffer);
+}
+
 void VulkanTexture2D::UpdateDescriptorInfo()
 {
     m_DescriptorInfo = m_Image->GetDescriptorInfo();
@@ -203,4 +265,11 @@ void VulkanTexture2D::UpdateDescriptorInfo()
 void VulkanTexture2D::TransitionLayout(VkCommandBuffer cmd, VkImageLayout newLayout)
 {
     m_Image->TransitionLayout(cmd, newLayout);
+    UpdateDescriptorInfo();
+}
+
+void VulkanTexture2D::UpdateState(VkImageLayout expectedLayout)
+{
+    m_Image->SetExpectedLayout(expectedLayout);
+    UpdateDescriptorInfo();
 }

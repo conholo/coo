@@ -2,6 +2,8 @@
 
 #include "vulkan_swapchain_renderer.h"
 #include "vulkan_deferred_renderer.h"
+#include "vulkan_simple_renderer.h"
+
 #include "core/game_object.h"
 #include "core/frame_info.h"
 
@@ -26,6 +28,7 @@ private:
     Window& m_WindowRef;
     std::unique_ptr<VulkanSwapchainRenderer> m_SwapchainRenderer;
     std::unique_ptr<VulkanDeferredRenderer> m_DeferredRenderer;
+    std::unique_ptr<VulkanSimpleRenderer> m_SimpleRenderer;
     std::vector<std::shared_ptr<VulkanBuffer>> m_GlobalUboBuffers{VulkanSwapchain::MAX_FRAMES_IN_FLIGHT};
 
 

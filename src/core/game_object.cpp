@@ -98,12 +98,12 @@ void GameObject::Render(FrameInfo& frameInfo)
                {
                    .binding = 1,
                    .type = DescriptorUpdate::Type::Image,
-                   .imageInfo = DiffuseMap->GetDescriptorInfo()
+                   .imageInfo = DiffuseMap->GetBaseViewDescriptorInfo()
                },
                {
                    .binding = 2,
                    .type = DescriptorUpdate::Type::Image,
-                   .imageInfo = NormalMap->GetDescriptorInfo()
+                   .imageInfo = NormalMap->GetBaseViewDescriptorInfo()
                }
            }
        }

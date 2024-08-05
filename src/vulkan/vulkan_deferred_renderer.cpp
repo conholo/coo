@@ -218,7 +218,7 @@ void VulkanDeferredRenderer::CreateOrInvalidateGBufferFramebuffers()
     {
         std::vector <VkImageView> attachments;
         for (const auto &texture: m_GBufferTextures[i])
-            attachments.push_back(texture->GetImage()->GetView()->ImageView());
+            attachments.push_back(texture->GetImage()->GetView()->GetImageView());
 
         m_GBufferFramebuffers[i] = std::make_unique<VulkanFramebuffer>("G-Buffer Framebuffer " + std::to_string(i));
         m_GBufferFramebuffers[i]->Create(m_GBufferPass->RenderPass(), attachments, extent.width, extent.height);
@@ -325,7 +325,7 @@ void VulkanDeferredRenderer::CreateOrInvalidateLightingFramebuffers()
     m_LightingFramebuffers.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
     for (uint32_t i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; i++)
     {
-        std::vector <VkImageView> attachments { m_LightingTextures[i]->GetImage()->GetView()->ImageView() };
+        std::vector <VkImageView> attachments { m_LightingTextures[i]->GetImage()->GetView()->GetImageView() };
         m_LightingFramebuffers[i] = std::make_unique<VulkanFramebuffer>("Lighting Framebuffer " + std::to_string(i));
         m_LightingFramebuffers[i]->Create(m_LightingPass->RenderPass(), attachments, extent.width, extent.height);
     }
@@ -412,7 +412,7 @@ void VulkanDeferredRenderer::CreateOrInvalidateCompositionFramebuffers()
     m_CompositionFramebuffers.resize(imageCount);
     for (uint32_t i = 0; i < imageCount; i++)
     {
-        std::vector <VkImageView> attachments { m_Renderer->VulkanSwapchain().GetImage(i)->GetView()->ImageView() };
+        std::vector <VkImageView> attachments { m_Renderer->VulkanSwapchain().GetImage(i)->GetView()->GetImageView() };
         m_CompositionFramebuffers[i] = std::make_unique<VulkanFramebuffer>("Composition Framebuffer " + std::to_string(i));
         m_CompositionFramebuffers[i]->Create(m_CompositionPass->RenderPass(), attachments, extent.width, extent.height);
     }
@@ -478,9 +478,9 @@ void VulkanDeferredRenderer::Render(FrameInfo& frameInfo)
     }
     m_GBufferPass->EndPass(frameInfo.CommandBuffer);
 
-    // Transition G-Buffer textures to SHADER_READ_ONLY_OPTIMAL for sampling in the lighting pass
+    // Update internal host-side state to reflect the image transitions made during the render pass
     for (size_t i = 0; i < m_GBufferTextures[frameInfo.FrameIndex].size() - 1; ++i)
-        m_GBufferTextures[frameInfo.FrameIndex][i]->TransitionLayout(frameInfo.CommandBuffer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        m_GBufferTextures[frameInfo.FrameIndex][i]->UpdateState(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     /*
      *  Lighting Pass
@@ -514,19 +514,19 @@ void VulkanDeferredRenderer::Render(FrameInfo& frameInfo)
                    // Position
                    .binding = 0,
                    .type = DescriptorUpdate::Type::Image,
-                   .imageInfo = m_GBufferTextures[frameInfo.FrameIndex][0]->GetDescriptorInfo()
+                   .imageInfo = m_GBufferTextures[frameInfo.FrameIndex][0]->GetBaseViewDescriptorInfo()
                },
                {
                    // Normal
                    .binding = 1,
                    .type = DescriptorUpdate::Type::Image,
-                   .imageInfo = m_GBufferTextures[frameInfo.FrameIndex][1]->GetDescriptorInfo()
+                   .imageInfo = m_GBufferTextures[frameInfo.FrameIndex][1]->GetBaseViewDescriptorInfo()
                },
                {
                    // Albedo
                    .binding = 2,
                    .type = DescriptorUpdate::Type::Image,
-                   .imageInfo = m_GBufferTextures[frameInfo.FrameIndex][2]->GetDescriptorInfo()
+                   .imageInfo = m_GBufferTextures[frameInfo.FrameIndex][2]->GetBaseViewDescriptorInfo()
                }
            }
        }
@@ -536,7 +536,8 @@ void VulkanDeferredRenderer::Render(FrameInfo& frameInfo)
     // Full Screen Triangle
     vkCmdDraw(frameInfo.CommandBuffer, 3, 1, 0, 0);
     m_LightingPass->EndPass(frameInfo.CommandBuffer);
-    m_LightingTextures[frameInfo.FrameIndex]->TransitionLayout(frameInfo.CommandBuffer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    // Update internal host-side state to reflect the image transitions made during the render pass
+    m_LightingTextures[frameInfo.FrameIndex]->UpdateState(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     /*
      *  Composition Pass
@@ -561,12 +562,14 @@ void VulkanDeferredRenderer::Render(FrameInfo& frameInfo)
                      // Lighting Output
                      .binding = 0,
                      .type = DescriptorUpdate::Type::Image,
-                     .imageInfo = m_LightingTextures[frameInfo.FrameIndex]->GetDescriptorInfo()
+                     .imageInfo = m_LightingTextures[frameInfo.FrameIndex]->GetBaseViewDescriptorInfo()
                  }
              }
          }
      });
     m_CompositionMaterial->BindDescriptors(frameInfo.FrameIndex, frameInfo.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS);
+
+    // Full Screen Triangle
     vkCmdDraw(frameInfo.CommandBuffer, 3, 1, 0, 0);
     m_CompositionPass->EndPass(frameInfo.CommandBuffer);
 }

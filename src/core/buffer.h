@@ -131,6 +131,8 @@ public:
     uint8_t* Data() noexcept { return m_Data.get(); }
     const uint8_t* Data() const noexcept { return m_Data.get(); }
 
+    bool IsEmpty() const { return m_Data == nullptr || m_Size == 0; }
+
 private:
     std::unique_ptr<uint8_t[]> m_Data;
     std::size_t m_Size = 0;

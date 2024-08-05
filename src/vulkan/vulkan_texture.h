@@ -3,6 +3,7 @@
 #include <string>
 #include <memory>
 #include "vulkan_image.h"
+#include "core/buffer.h"
 
 enum class TextureUsage { Texture, Attachment, Storage };
 
@@ -44,10 +45,14 @@ public:
     uint32_t GetWidth() const { return m_Specification.Width; }
     uint32_t GetHeight() const { return m_Specification.Height; }
     const TextureSpecification& GetSpecification() const { return m_Specification; }
+    VkImage GetVkImage() const;
+    VkImageLayout GetCurrentLayout() const;
+    bool HasMipmaps() const;
 
     VulkanImage2D* GetImage() const { return m_Image.get(); }
-    const VkDescriptorImageInfo& GetDescriptorInfo() const { return m_DescriptorInfo; }
+    const VkDescriptorImageInfo& GetBaseViewDescriptorInfo() const { return m_DescriptorInfo; }
 
+    void UpdateState(VkImageLayout expectedLayout);
     void TransitionLayout(VkCommandBuffer cmd, VkImageLayout newLayout);
 
 private:
@@ -55,6 +60,7 @@ private:
     void LoadFromMemory(const Buffer& data);
     void CreateTextureImage();
     void CreateAttachmentImage();
+    void CreateEmptyTextureImage();
     void UpdateDescriptorInfo();
 
     TextureSpecification m_Specification;
