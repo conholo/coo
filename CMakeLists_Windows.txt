@@ -1,0 +1,106 @@
+message(STATUS "CREATING BUILD FOR WINDOWS")
+
+# Vulkan SDK setup
+if (DEFINED VULKAN_SDK_PATH)
+    set(Vulkan_INCLUDE_DIRS "${VULKAN_SDK_PATH}/Include")
+    set(Vulkan_LIBRARIES "${VULKAN_SDK_PATH}/Lib")
+    set(Vulkan_FOUND "True")
+else ()
+    find_package(Vulkan REQUIRED)
+    message(STATUS "Found Vulkan: $ENV{VULKAN_SDK}")
+endif ()
+
+# GLFW setup
+if (DEFINED GLFW_PATH)
+    message(STATUS "Using GLFW path specified in .env at: ${GLFW_PATH}")
+    set(GLFW_INCLUDE_DIRS "${GLFW_PATH}/include")
+    if (MSVC)
+        set(GLFW_LIB "${GLFW_PATH}/lib-vc2019")
+    elseif (CMAKE_GENERATOR STREQUAL "MinGW Makefiles" OR CMAKE_GENERATOR STREQUAL "Ninja")
+        set(GLFW_LIB "${GLFW_PATH}/lib-mingw-w64")
+    endif ()
+else ()
+    find_package(glfw3 3.3 REQUIRED)
+    set(GLFW_LIB glfw)
+    message(STATUS "Found GLFW")
+endif ()
+
+# TinyOBJ setup
+if (NOT TINYOBJ_PATH)
+    set(TINYOBJ_PATH ${CMAKE_SOURCE_DIR}/third_party/)
+    message(STATUS "TINYOBJ_PATH not specified in .env.cmake, using: ${TINYOBJ_PATH}")
+endif ()
+
+# Include directories
+target_include_directories(${PROJECT_NAME} PUBLIC
+    ${CMAKE_SOURCE_DIR}/src
+    ${Vulkan_INCLUDE_DIRS}
+    ${GLFW_INCLUDE_DIRS}
+    ${PROJECT_SOURCE_DIR}/include
+    ${TINYOBJ_PATH}
+    ${GLM_PATH}/include
+)
+
+# Link directories
+target_link_directories(${PROJECT_NAME} PUBLIC
+    ${Vulkan_LIBRARIES}
+    ${GLFW_LIB}
+)
+
+# SPIRV-Cross and Shaderc setup
+set(SPIRV_CROSS_PATH "C:/dev/cpp/libs/SPIRV-Cross")
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "Using the following debug builds: shaderc, spirv-cross")
+    set(SHADERC_LIB_PATH "C:/dev/cpp/libs/shaderc/build-debug/libshaderc/libshaderc_combined.a")
+    set(SPIRV_CROSS_BUILD_PATH "${SPIRV_CROSS_PATH}/build-debug")
+
+    set(SPIRV_CROSS_LIBRARIES
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-cored.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-glsld.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-hlsld.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-cppd.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-reflectd.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-msld.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-utild.a"
+    )
+else()
+    message(STATUS "Using the following release builds: shaderc, spirv-cross")
+    set(SHADERC_LIB_PATH "C:/dev/cpp/libs/shaderc/build/libshaderc/libshaderc_combined.a")
+
+    set(SPIRV_CROSS_BUILD_PATH "${SPIRV_CROSS_PATH}/build")
+    set(SPIRV_CROSS_LIBRARIES
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-core.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-glsl.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-hlsl.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-cpp.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-reflect.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-msl.a"
+            "${SPIRV_CROSS_BUILD_PATH}/libspirv-cross-util.a"
+    )
+endif()
+
+set(SHADERC_INCLUDE_DIRS "C:/dev/cpp/libs/shaderc/libshaderc/include")
+set(SHADERC_LIBRARIES ${SHADERC_LIB_PATH})
+
+set(SPIRV_CROSS_INCLUDE_DIRS "${SPIRV_CROSS_PATH}/include")
+include_directories(${SHADERC_INCLUDE_DIRS} ${SPIRV_CROSS_INCLUDE_DIRS})
+
+# Link libraries
+target_link_libraries(${PROJECT_NAME}
+    ${GLFW_LIB}/libglfw3.a
+    ${Vulkan_LIBRARIES}/vulkan-1.lib
+    ${SHADERC_LIBRARIES}
+    ${SPIRV_CROSS_LIBRARIES}
+)
+
+# MinGW-specific flags
+if(USE_MINGW)
+    target_link_libraries(${PROJECT_NAME}
+        -static-libgcc
+        -static-libstdc++
+        -lwsock32
+        -lws2_32
+        -lbcrypt
+    )
+endif()
