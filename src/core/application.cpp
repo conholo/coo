@@ -9,10 +9,15 @@ void Application::CreateGameObjects(Scene& scene, VulkanRenderer& renderer)
     {
         .Usage = TextureUsage::Texture,
     };
-	spec.DebugName = "Lava Texture";
-	auto lavaTexture = VulkanTexture2D::CreateFromFile(spec, "../assets/textures/marble.png");
-	spec.DebugName = "Marble Texture";
-	auto marbleTexture = VulkanTexture2D::CreateFromFile(spec, "../assets/textures/lava.png");
+	spec.DebugName = "Marble Color Texture";
+	auto marbleColor = VulkanTexture2D::CreateFromFile(spec, "../assets/textures/marble/color.jpg");
+	spec.DebugName = "Marble Normal Texture";
+	auto marbleNormal = VulkanTexture2D::CreateFromFile(spec, "../assets/textures/marble/normal.jpg");
+
+	spec.DebugName = "Paving Stones Color Texture";
+	auto pavingStonesColor = VulkanTexture2D::CreateFromFile(spec, "../assets/textures/paving_stones/color.jpg");
+	spec.DebugName = "Paving Stones Normal Texture";
+	auto pavingStonesNormal = VulkanTexture2D::CreateFromFile(spec, "../assets/textures/paving_stones/normal.jpg");
 
     auto cubeModel = VulkanModel::CreateModelFromFile("../assets/models/cube.obj");
     auto quadModel = VulkanModel::CreateModelFromFile("../assets/models/quad.obj");
@@ -22,16 +27,16 @@ void Application::CreateGameObjects(Scene& scene, VulkanRenderer& renderer)
 	cubeA.ObjectTransform.Translation = {-0.5f, 0.0f, 2.0f};
 	cubeA.ObjectTransform.Scale = {0.25, 0.25, 0.25};
 	cubeA.ObjectTransform.Rotation = {0.0f, 0.0f, 0.0f};
-	cubeA.DiffuseMap = marbleTexture;
-	cubeA.NormalMap = lavaTexture;
+	cubeA.DiffuseMap = pavingStonesColor;
+	cubeA.NormalMap = pavingStonesNormal;
 
     auto &floor = scene.CreateGameObject(renderer);
     floor.ObjectModel = quadModel;
     floor.ObjectTransform.Translation = {0.0f, 0.0f, 0.0};
     floor.ObjectTransform.Scale = {3.f, 1.0f, 3.f};
     floor.ObjectTransform.Rotation = {270.0, 0.0, 0.0};
-	floor.DiffuseMap = marbleTexture;
-	floor.NormalMap = lavaTexture;
+	floor.DiffuseMap = marbleColor;
+	floor.NormalMap = marbleNormal;
 }
 
 Application::Application()

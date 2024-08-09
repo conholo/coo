@@ -204,9 +204,10 @@ void VulkanImage2D::CreateSampler()
 
 	builder.SetAnisotropy(16.0f)
 		.SetForIntegerFormat(ImageUtils::IsIntegerBased(m_Specification.Format))
-		.SetFilter(VK_FILTER_NEAREST, VK_FILTER_NEAREST)
-		.SetAddressMode(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
-
+		.SetFilter(m_Specification.SamplerSpec.MinFilter, m_Specification.SamplerSpec.MagFilter)
+		.SetMipmapMode(m_Specification.SamplerSpec.MipMapMode)
+		.SetAddressMode(m_Specification.SamplerSpec.AddressModeU, m_Specification.SamplerSpec.AddressModeV, m_Specification.SamplerSpec.AddressModeW);
+	
 	m_Sampler = builder.Build();
 }
 

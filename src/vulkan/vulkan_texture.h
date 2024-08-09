@@ -13,12 +13,11 @@ struct TextureSpecification
     TextureUsage Usage = TextureUsage::Texture;
     uint32_t Width = 1;
     uint32_t Height = 1;
-    TextureWrap SamplerWrap = TextureWrap::Repeat;
-    TextureFilter SamplerFilter = TextureFilter::Linear;
     bool GenerateMips = true;
     VkMemoryPropertyFlags MemoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     bool UsedInTransferOps = false;
-    VkImageUsageFlags AdditionalUsageFlags = 0;
+	bool CreateSampler = true;
+	SamplerSpecification SamplerSpec{};
     std::string DebugName;
 };
 

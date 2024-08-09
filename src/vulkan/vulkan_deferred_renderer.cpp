@@ -122,12 +122,18 @@ void VulkanDeferredRenderer::InvalidateGBufferPass()
 
 void VulkanDeferredRenderer::CreateGBufferTextures()
 {
-	TextureSpecification positionTextureSpec{
+	TextureSpecification positionTextureSpec
+	{
 		.Format = ImageFormat::RGBA16F,
 		.Usage = TextureUsage::Attachment,
 		.Width = m_Renderer->VulkanSwapchain().Width(),
 		.Height = m_Renderer->VulkanSwapchain().Height(),
 		.MemoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.SamplerSpec
+		{
+			.MinFilter = VK_FILTER_NEAREST,
+			.MagFilter = VK_FILTER_NEAREST
+		},
 		.DebugName = "G-Buffer Position",
 	};
 	for (int i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; ++i)
@@ -142,6 +148,11 @@ void VulkanDeferredRenderer::CreateGBufferTextures()
 		.Width = m_Renderer->VulkanSwapchain().Width(),
 		.Height = m_Renderer->VulkanSwapchain().Height(),
 		.MemoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.SamplerSpec
+		{
+			.MinFilter = VK_FILTER_NEAREST,
+			.MagFilter = VK_FILTER_NEAREST
+		},
 		.DebugName = "G-Buffer Normal",
 	};
 	for (int i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; ++i)
@@ -156,6 +167,11 @@ void VulkanDeferredRenderer::CreateGBufferTextures()
 		.Width = m_Renderer->VulkanSwapchain().Width(),
 		.Height = m_Renderer->VulkanSwapchain().Height(),
 		.MemoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.SamplerSpec
+		{
+			.MinFilter = VK_FILTER_LINEAR,
+			.MagFilter = VK_FILTER_LINEAR
+		},
 		.DebugName = "G-Buffer Color",
 	};
 	for (int i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; ++i)
@@ -170,6 +186,7 @@ void VulkanDeferredRenderer::CreateGBufferTextures()
 		.Width = m_Renderer->VulkanSwapchain().Width(),
 		.Height = m_Renderer->VulkanSwapchain().Height(),
 		.MemoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.CreateSampler = false,
 		.DebugName = "G-Buffer Depth",
 	};
 
@@ -330,6 +347,11 @@ void VulkanDeferredRenderer::CreateLightingTextures()
 		.Width = m_Renderer->VulkanSwapchain().Width(),
 		.Height = m_Renderer->VulkanSwapchain().Height(),
 		.MemoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.SamplerSpec
+		{
+			.MinFilter = VK_FILTER_LINEAR,
+			.MagFilter = VK_FILTER_LINEAR
+		},
 		.DebugName = "Lighting Color",
 	};
 	for (int i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; i++)
