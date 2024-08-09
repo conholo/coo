@@ -133,7 +133,7 @@ uint32_t VulkanRenderPass::ColorAttachmentCount()
     return counter;
 }
 
-void VulkanRenderPass::BeginPass(VkCommandBuffer commandBuffer, VkRenderPassBeginInfo beginInfo, VulkanSwapchain& swapchainRef)
+void VulkanRenderPass::BeginPass(VkCommandBuffer commandBuffer, VkRenderPassBeginInfo beginInfo, VkExtent2D extent)
 {
     if(m_AttachmentClearValues.size() != m_Attachments.size())
         m_AttachmentClearValues.resize(m_Attachments.size());
@@ -149,11 +149,11 @@ void VulkanRenderPass::BeginPass(VkCommandBuffer commandBuffer, VkRenderPassBegi
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
-    viewport.width = static_cast<float>(swapchainRef.Extent().width);
-    viewport.height = static_cast<float>(swapchainRef.Extent().height);
+    viewport.width = static_cast<float>(extent.width);
+    viewport.height = static_cast<float>(extent.height);
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
-    VkRect2D scissor{{0, 0}, swapchainRef.Extent()};
+    VkRect2D scissor{{0, 0}, extent};
     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 }

@@ -1,6 +1,8 @@
 #include "vulkan_image.h"
-#include "vulkan_utils.h"
+
 #include "vulkan_context.h"
+#include "vulkan_sampler_builder.h"
+#include "vulkan_utils.h"
 
 #include <utility>
 
@@ -38,7 +40,8 @@ VulkanImage2D::~VulkanImage2D()
 
 void VulkanImage2D::Release()
 {
-    m_MipViews.clear();  // Destroys all imageInfo views
+	if(m_Specification.Usage != ImageUsage::Swapchain)
+		m_MipViews.clear();  // Destroys all imageInfo views
 
     if (m_Sampler != VK_NULL_HANDLE)
     {
@@ -51,8 +54,8 @@ void VulkanImage2D::Release()
         if(m_Specification.Usage != ImageUsage::Swapchain)
         {
             vkDestroyImage(VulkanContext::Get().Device(), m_Image, nullptr);
+			m_Image = VK_NULL_HANDLE;
         }
-        m_Image = VK_NULL_HANDLE;
     }
 
     if (m_DeviceMemory != VK_NULL_HANDLE)
@@ -60,9 +63,22 @@ void VulkanImage2D::Release()
         if(m_Specification.Usage != ImageUsage::Swapchain)
         {
             vkFreeMemory(VulkanContext::Get().Device(), m_DeviceMemory, nullptr);
+			m_DeviceMemory = VK_NULL_HANDLE;
         }
-        m_DeviceMemory = VK_NULL_HANDLE;
     }
+}
+
+void VulkanImage2D::ReleaseSwapchainResources()
+{
+	if(m_Specification.Usage != ImageUsage::Swapchain)
+		return;
+
+	// Invoke destructor of VulkanImageView to free the VkImageView via clear().
+	m_MipViews.clear();
+
+	// The image and device memory will be freed by the implementation.
+	m_Image = VK_NULL_HANDLE;
+	m_DeviceMemory = VK_NULL_HANDLE;
 }
 
 void VulkanImage2D::Invalidate()
@@ -184,32 +200,14 @@ void VulkanImage2D::SetupImageSharingMode(VkImageCreateInfo &imageCreateInfo)
 
 void VulkanImage2D::CreateSampler()
 {
-    VkSamplerCreateInfo samplerCreateInfo = {};
-    samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerCreateInfo.anisotropyEnable = VK_TRUE;
-    samplerCreateInfo.maxAnisotropy = 16.0f;
+	VulkanSamplerBuilder builder;
 
-    if (ImageUtils::IsIntegerBased(m_Specification.Format))
-    {
-        samplerCreateInfo.magFilter = VK_FILTER_NEAREST;
-        samplerCreateInfo.minFilter = VK_FILTER_NEAREST;
-        samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-    } else
-    {
-        samplerCreateInfo.magFilter = VK_FILTER_LINEAR;
-        samplerCreateInfo.minFilter = VK_FILTER_LINEAR;
-        samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    }
+	builder.SetAnisotropy(16.0f)
+		.SetForIntegerFormat(ImageUtils::IsIntegerBased(m_Specification.Format))
+		.SetFilter(VK_FILTER_NEAREST, VK_FILTER_NEAREST)
+		.SetAddressMode(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
 
-    samplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    samplerCreateInfo.addressModeV = samplerCreateInfo.addressModeU;
-    samplerCreateInfo.addressModeW = samplerCreateInfo.addressModeU;
-    samplerCreateInfo.mipLodBias = 0.0f;
-    samplerCreateInfo.minLod = 0.0f;
-    samplerCreateInfo.maxLod = 100.0f;
-    samplerCreateInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-
-    VK_CHECK_RESULT(vkCreateSampler(VulkanContext::Get().Device(), &samplerCreateInfo, nullptr, &m_Sampler));
+	m_Sampler = builder.Build();
 }
 
 VulkanImageView* VulkanImage2D::GetView(uint32_t mip)
@@ -432,6 +430,13 @@ void VulkanImage2D::DetermineStageFlags(VkImageLayout oldLayout, VkImageLayout n
         srcAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         dstAccess = VK_ACCESS_SHADER_READ_BIT;
     }
+    else if (oldLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+    {
+        srcStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        srcAccess = VK_ACCESS_SHADER_READ_BIT;
+        dstAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    }
     else
     {
         srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
@@ -471,6 +476,13 @@ void VulkanImage2D::SetExpectedLayout(VkImageLayout expectedLayout)
     {
         view->UpdateDescriptorInfo(expectedLayout, m_Sampler);
     }
+}
+
+void VulkanImage2D::TransitionLayout(VkImageLayout newLayout, uint32_t baseMipLevel, uint32_t levelCount)
+{
+	auto cmd = VulkanContext::Get().BeginSingleTimeCommands();
+	TransitionLayout(cmd, newLayout, baseMipLevel, levelCount);
+	VulkanContext::Get().EndSingleTimeCommand(cmd);
 }
 
 VulkanImageView::VulkanImageView(VulkanImage2D* image, uint32_t mip)

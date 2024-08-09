@@ -3,7 +3,6 @@
 #include "vulkan/vulkan_model.h"
 #include "vulkan/vulkan_swapchain.h"
 #include "vulkan/vulkan_material.h"
-#include "vulkan/renderable_interfaces.h"
 #include "vulkan/vulkan_texture.h"
 
 #include <memory>
@@ -34,7 +33,7 @@ struct GameObjectBufferData
     glm::mat4 NormalMatrix{1.0f};
 };
 
-class GameObject : public IRenderable
+class GameObject
 {
 public:
     using id_t = unsigned int;
@@ -45,7 +44,7 @@ public:
     GameObject(GameObject&&) = default;
     GameObject&operator=(GameObject &&) = delete;
 
-    void Render(FrameInfo& frameInfo) override;
+    void Render(VkCommandBuffer cmd, uint32_t frameIndex, VkDescriptorBufferInfo globalUboInfo);
 
     id_t GetId() const { return m_Id; }
 

@@ -38,8 +38,15 @@ void VulkanMaterial::AllocateDescriptorSets()
     VulkanDescriptorPool::Builder poolBuilder;
     for (const auto& [type, count] : m_Layout->GetShaderDescriptorInfo().totalDescriptorCounts)
     {
+		if(count == 0) continue;
         poolBuilder.AddPoolSize(type, count * VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
     }
+
+	if(!poolBuilder.IsNotEmpty())
+	{
+		std::cout << "No types specified for descriptor pool - aborting descriptor set allocation" << "\n";
+		return;
+	}
 
     poolBuilder.SetMaxSets(m_Layout->GetShaderDescriptorInfo().GetTotalUniqueSetCount() * VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
     m_DescriptorPool = poolBuilder.Build();
@@ -93,10 +100,10 @@ void VulkanMaterial::UpdateDescriptorSets(uint32_t frameIndex, const std::vector
             switch (update.type)
             {
                 case DescriptorUpdate::Type::Buffer:
-                    writer.WriteBuffer(update.binding, &update.bufferInfo);
+                    writer.WriteBuffer(update.binding, update.bufferInfo);
                     break;
                 case DescriptorUpdate::Type::Image:
-                    writer.WriteImage(update.binding, &update.imageInfo);
+                    writer.WriteImage(update.binding, update.imageInfo);
                     break;
             }
         }

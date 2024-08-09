@@ -76,7 +76,7 @@ public:
 
 private:
     void ReflectEntryPoint(const spirv_cross::Compiler& compiler);
-    void ReflectResources(const spirv_cross::Compiler& compiler, const spirv_cross::ShaderResources& resources);
+    void ReflectDescriptors(const spirv_cross::Compiler& compiler, const spirv_cross::ShaderResources& resources);
     void ReflectVertexInputs(const spirv_cross::Compiler& compiler, const spirv_cross::ShaderResources& resources);
     void ReflectOutputs(const spirv_cross::Compiler& compiler, const spirv_cross::ShaderResources& resources);
     void ReflectPushConstants(const spirv_cross::Compiler& compiler, const spirv_cross::ShaderResources& resources);

@@ -240,3 +240,9 @@ VkFormat VulkanContext::SelectSupportedFormat(
     }
     throw std::runtime_error("Failed to find supported format!");
 }
+
+SwapchainSupportDetails VulkanContext::QuerySwapchainSupportDetailsOnSwapchainRecreation()
+{
+	m_PhysicalDevice.QuerySwapchainSupportDetails(m_Surface);
+	return m_PhysicalDevice.m_SwapchainSupportDetails;
+}

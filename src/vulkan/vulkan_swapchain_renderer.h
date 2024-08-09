@@ -1,7 +1,10 @@
 #pragma once
 
 #include "vulkan_swapchain.h"
+
+#include "core/frame_info.h"
 #include "core/window.h"
+
 #include <cassert>
 #include <functional>
 
@@ -17,13 +20,13 @@ public:
     VulkanSwapchainRenderer &operator=(const VulkanSwapchainRenderer &) = delete;
 
     void SetOnRecreateSwapchainCallback(const OnRecreateSwapchainCallbackFn &callbackFn) { m_RecreateSwapchainCallback = callbackFn; }
+
     VulkanSwapchain& GetSwapchain() { return *m_Swapchain; }
+	VkSemaphore GetImageAvailableSemaphore(uint32_t index) { return m_Swapchain->m_ImageAvailableSemaphores[index]; }
+	uint32_t CurrentImageIndex() const { return m_CurrentImageIndex; }
 
     VkCommandBuffer BeginFrame(uint32_t frameIndex);
-    void EndFrame(uint32_t frameIndex);
-    uint32_t CurrentImageIndex() const { return m_CurrentImageIndex; }
-
-    void CreateSyncObjects();
+	void EndFrame(FrameInfo& frameInfo);
 
 private:
 
@@ -36,10 +39,7 @@ private:
 
     std::unique_ptr<VulkanSwapchain> m_Swapchain;
     std::vector<VkCommandBuffer> m_DrawCommandBuffers;
-
-    std::vector<VkFence> m_InFlightFences;
-    std::vector<VkFence> m_ImagesInFlight;
-    std::vector<VkSemaphore> m_PresentCompleteSemaphores;
-    std::vector<VkSemaphore> m_RenderFinishedSemaphores;
     uint32_t m_CurrentImageIndex{0};
+
+	friend class VulkanRenderer;
 };

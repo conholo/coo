@@ -11,9 +11,9 @@ struct DescriptorUpdate
     enum class Type { Buffer, Image } type{};
     union
     {
-        VkDescriptorBufferInfo bufferInfo{};
-        VkDescriptorImageInfo imageInfo;
-    };
+		VkDescriptorBufferInfo bufferInfo{};
+		VkDescriptorImageInfo imageInfo;
+	};
     // Optional fields for more specific updates
     VkDeviceSize offset = 0;
     VkDeviceSize range = VK_WHOLE_SIZE;

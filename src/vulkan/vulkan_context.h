@@ -32,6 +32,7 @@ public:
     static void Initialize(const char *applicationName, uint32_t applicationVersion, Window* windowPtr);
     static void Shutdown();
 
+    VkInstance Instance() const { return m_Instance.Instance; }
     VkDevice Device() const { return m_LogicalDevice.Device; }
     VkPhysicalDevice PhysicalDevice() const { return m_PhysicalDevice.PhysicalDevice; }
     VkPhysicalDeviceProperties PhysicalDeviceProperties() const { return m_PhysicalDevice.PhysicalDeviceProperties; }
@@ -41,6 +42,8 @@ public:
     VkCommandPool ComputeCommandPool() const { return m_GraphicsCommandPool; }
 
     QueueFamilyIndices GetAvailableDeviceQueueFamilyIndices() const { return m_PhysicalDevice.ReadQueueFamilyIndices(); }
+
+	SwapchainSupportDetails QuerySwapchainSupportDetailsOnSwapchainRecreation();
     SwapchainSupportDetails GetAvailableDeviceSwapchainSupportDetails() const { return m_PhysicalDevice.ReadSwapchainSupportDetails(); }
 
     VkQueue GraphicsQueue() const { return m_LogicalDevice.m_GraphicsQueue; }
@@ -88,9 +91,9 @@ private:
     };
     const std::vector<const char *> m_ValidationLayers =
     {
-        "VK_LAYER_KHRONOS_validation",
-        "VK_LAYER_LUNARG_api_dump",
-        "VK_LAYER_KHRONOS_profiles",
+       "VK_LAYER_KHRONOS_validation",
+       //"VK_LAYER_LUNARG_api_dump",
+       //"VK_LAYER_KHRONOS_profiles",
     };
 
 #if NDEBUG

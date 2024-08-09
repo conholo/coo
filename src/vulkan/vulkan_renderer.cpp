@@ -1,89 +1,79 @@
 #include "vulkan_renderer.h"
+
 #include "core/frame_info.h"
+#include "vulkan_deferred_renderer.h"
+#include "vulkan_simple_renderer.h"
+#include "vulkan_utils.h"
+
 #include <memory>
 
-VulkanRenderer::VulkanRenderer(Window &window)
-    : m_WindowRef(window)
+VulkanRenderer::VulkanRenderer(Window& window) : m_WindowRef(window)
 {
-    m_SwapchainRenderer = std::make_unique<VulkanSwapchainRenderer>(window);
-    m_SwapchainRenderer->SetOnRecreateSwapchainCallback(
-        [this](uint32_t width, uint32_t height)
-                {
-                    OnSwapchainRecreate(width, height);
-                });
-    //m_DeferredRenderer = std::make_unique<VulkanDeferredRenderer>(this);
-
-    m_SimpleRenderer = std::make_unique<VulkanSimpleRenderer>(this);
+	m_SwapchainRenderer = std::make_unique<VulkanSwapchainRenderer>(window);
+	m_SwapchainRenderer->SetOnRecreateSwapchainCallback(
+		[this](uint32_t width, uint32_t height)
+		{
+			m_CurrentFrameIndex = 0;
+			OnSwapchainRecreate(width, height);
+		});
+	m_Renderer = std::make_unique<VulkanDeferredRenderer>(this);
 }
 
 VulkanRenderer::~VulkanRenderer()
 {
-
+	Shutdown();
 }
 
 void VulkanRenderer::Initialize()
 {
-    for(auto& uboBuffer : m_GlobalUboBuffers)
-    {
-        uboBuffer = std::make_shared<VulkanBuffer>(
-                sizeof(GlobalUbo),
-                1,
-                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-        uboBuffer->Map();
-    }
+	for (auto& uboBuffer : m_GlobalUboBuffers)
+	{
+		uboBuffer = std::make_shared<VulkanBuffer>(
+			sizeof(GlobalUbo), 1, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+		uboBuffer->Map();
+	}
 
-    //m_DeferredRenderer->Initialize();
-    m_SimpleRenderer->Initialize();
+	m_Renderer->Initialize();
 }
 
 void VulkanRenderer::Render(FrameInfo& frameInfo)
 {
-    GlobalUbo ubo
-    {
-        .Projection = frameInfo.Cam.GetProjection(),
-        .View = frameInfo.Cam.GetView(),
-        .InvView = frameInfo.Cam.GetInvView(),
-        .InvProjection = frameInfo.Cam.GetInvProjection(),
-        .CameraPosition = glm::vec4(frameInfo.Cam.GetPosition(), 1.0)
-    };
-    frameInfo.GlobalUbo = m_GlobalUboBuffers[frameInfo.FrameIndex];
-    frameInfo.GlobalUbo->WriteToBuffer(&ubo);
-    frameInfo.GlobalUbo->Flush();
+	VkCommandBuffer cmd = m_SwapchainRenderer->BeginFrame(m_CurrentFrameIndex);
+	if (cmd == VK_NULL_HANDLE)
+	{
+		// Swapchain needs to be recreated, don't proceed with rendering
+		std::cout << "Swapchain recreation needed, skipping render for this cycle" << std::endl;
+		return;
+	}
 
-    VkCommandBuffer cmd = m_SwapchainRenderer->BeginFrame(frameInfo.FrameIndex);
-    frameInfo.CommandBuffer = cmd;
+	GlobalUbo ubo{
+		.Projection = frameInfo.Cam.GetProjection(),
+		.View = frameInfo.Cam.GetView(),
+		.InvView = frameInfo.Cam.GetInvView(),
+		.InvProjection = frameInfo.Cam.GetInvProjection(),
+		.CameraPosition = glm::vec4(frameInfo.Cam.GetPosition(), 1.0)};
 
-    if (cmd != VK_NULL_HANDLE)
-    {
-        vkResetCommandBuffer(cmd, 0);
+	frameInfo.GlobalUbo = m_GlobalUboBuffers[m_CurrentFrameIndex];
+	frameInfo.GlobalUbo->WriteToBuffer(&ubo);
+	frameInfo.GlobalUbo->Flush();
+	frameInfo.DrawCommandBuffer = cmd;
 
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	m_Renderer->Render(frameInfo);
 
-        vkBeginCommandBuffer(cmd, &beginInfo);
-
-        //m_DeferredRenderer->Render(frameInfo);
-        m_SimpleRenderer->Render(frameInfo);
-
-        vkEndCommandBuffer(cmd);
-
-        m_SwapchainRenderer->EndFrame(frameInfo.FrameIndex);
-    }
+	m_SwapchainRenderer->EndFrame(frameInfo);
+	m_CurrentFrameIndex = (m_CurrentFrameIndex + 1) % VulkanSwapchain::MAX_FRAMES_IN_FLIGHT;
 }
 
-void VulkanRenderer::PrepareGameObjectForRendering(GameObject &gameObjectRef)
+void VulkanRenderer::PrepareGameObjectForRendering(GameObject& gameObjectRef)
 {
-    //m_DeferredRenderer->RegisterGameObject(gameObjectRef);
+	m_Renderer->RegisterGameObject(gameObjectRef);
 }
 
 void VulkanRenderer::OnSwapchainRecreate(uint32_t width, uint32_t height)
 {
-    //m_DeferredRenderer->Resize(width, height);
-    m_SimpleRenderer->Resize(width, height);
+	m_Renderer->Resize(width, height);
 }
 
 void VulkanRenderer::Shutdown()
 {
-
 }

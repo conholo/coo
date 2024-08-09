@@ -16,11 +16,12 @@ struct GlobalUbo
 
 struct FrameInfo
 {
-    size_t FrameCounter;
     size_t FrameIndex;
     float DeltaTime;
     Scene& ActiveScene;
     std::shared_ptr<VulkanBuffer> GlobalUbo;
-    VkCommandBuffer CommandBuffer;
+    VkCommandBuffer DrawCommandBuffer;
+	VkSemaphore SignalForPresentation;
+	VkSemaphore WaitForGraphicsSubmit;
     Camera& Cam;
 };

@@ -12,7 +12,7 @@ VulkanShaderReflection::VulkanShaderReflection(const std::vector<uint32_t>& spir
     std::cout << "Reflecting shader of stage: " << GetShaderStageName(stage) << std::endl;
 
     ReflectEntryPoint(compiler);
-    ReflectResources(compiler, resources);
+	ReflectDescriptors(compiler, resources);
     ReflectPushConstants(compiler, resources);
     ReflectVertexInputs(compiler, resources);
     ReflectOutputs(compiler, resources);
@@ -25,7 +25,7 @@ void VulkanShaderReflection::ReflectEntryPoint(const spirv_cross::Compiler& comp
     std::cout << "Entry point: " << m_EntryPoint << std::endl;
 }
 
-void VulkanShaderReflection::ReflectResources(const spirv_cross::Compiler& compiler, const spirv_cross::ShaderResources& resources)
+void VulkanShaderReflection::ReflectDescriptors(const spirv_cross::Compiler& compiler, const spirv_cross::ShaderResources& resources)
 {
     auto reflectResource = [&](const spirv_cross::Resource& resource, VkDescriptorType descriptorType)
     {
@@ -485,22 +485,74 @@ std::string VulkanShaderReflection::GetDescriptorTypeName(VkDescriptorType type)
 
 std::string VulkanShaderReflection::GetVkFormatName(VkFormat format)
 {
-    switch (format)
-    {
-        case VK_FORMAT_R32_SFLOAT: return "R32_SFLOAT";
-        case VK_FORMAT_R32G32_SFLOAT: return "R32G32_SFLOAT";
-        case VK_FORMAT_R32G32B32_SFLOAT: return "R32G32B32_SFLOAT";
-        case VK_FORMAT_R32G32B32A32_SFLOAT: return "R32G32B32A32_SFLOAT";
-        case VK_FORMAT_R32_SINT: return "R32_SINT";
-        case VK_FORMAT_R32G32_SINT: return "R32G32_SINT";
-        case VK_FORMAT_R32G32B32_SINT: return "R32G32B32_SINT";
-        case VK_FORMAT_R32G32B32A32_SINT: return "R32G32B32A32_SINT";
-        case VK_FORMAT_R32_UINT: return "R32_UINT";
-        case VK_FORMAT_R32G32_UINT: return "R32G32_UINT";
-        case VK_FORMAT_R32G32B32_UINT: return "R32G32B32_UINT";
-        case VK_FORMAT_R32G32B32A32_UINT: return "R32G32B32A32_UINT";
-        default: return "Unknown Format";
-    }
+	switch (format)
+	{
+		// 32-bit float formats
+		case VK_FORMAT_R32_SFLOAT: return "R32_SFLOAT";
+		case VK_FORMAT_R32G32_SFLOAT: return "R32G32_SFLOAT";
+		case VK_FORMAT_R32G32B32_SFLOAT: return "R32G32B32_SFLOAT";
+		case VK_FORMAT_R32G32B32A32_SFLOAT: return "R32G32B32A32_SFLOAT";
+
+		// 32-bit signed integer formats
+		case VK_FORMAT_R32_SINT: return "R32_SINT";
+		case VK_FORMAT_R32G32_SINT: return "R32G32_SINT";
+		case VK_FORMAT_R32G32B32_SINT: return "R32G32B32_SINT";
+		case VK_FORMAT_R32G32B32A32_SINT: return "R32G32B32A32_SINT";
+
+		// 32-bit unsigned integer formats
+		case VK_FORMAT_R32_UINT: return "R32_UINT";
+		case VK_FORMAT_R32G32_UINT: return "R32G32_UINT";
+		case VK_FORMAT_R32G32B32_UINT: return "R32G32B32_UINT";
+		case VK_FORMAT_R32G32B32A32_UINT: return "R32G32B32A32_UINT";
+
+		// 16-bit float formats
+		case VK_FORMAT_R16_SFLOAT: return "R16_SFLOAT";
+		case VK_FORMAT_R16G16_SFLOAT: return "R16G16_SFLOAT";
+		case VK_FORMAT_R16G16B16_SFLOAT: return "R16G16B16_SFLOAT";
+		case VK_FORMAT_R16G16B16A16_SFLOAT: return "R16G16B16A16_SFLOAT";
+
+		// 16-bit signed integer formats
+		case VK_FORMAT_R16_SINT: return "R16_SINT";
+		case VK_FORMAT_R16G16_SINT: return "R16G16_SINT";
+		case VK_FORMAT_R16G16B16_SINT: return "R16G16B16_SINT";
+		case VK_FORMAT_R16G16B16A16_SINT: return "R16G16B16A16_SINT";
+
+		// 16-bit unsigned integer formats
+		case VK_FORMAT_R16_UINT: return "R16_UINT";
+		case VK_FORMAT_R16G16_UINT: return "R16G16_UINT";
+		case VK_FORMAT_R16G16B16_UINT: return "R16G16B16_UINT";
+		case VK_FORMAT_R16G16B16A16_UINT: return "R16G16B16A16_UINT";
+
+		// 8-bit signed integer formats
+		case VK_FORMAT_R8_SINT: return "R8_SINT";
+		case VK_FORMAT_R8G8_SINT: return "R8G8_SINT";
+		case VK_FORMAT_R8G8B8_SINT: return "R8G8B8_SINT";
+		case VK_FORMAT_R8G8B8A8_SINT: return "R8G8B8A8_SINT";
+
+		// 8-bit unsigned integer formats
+		case VK_FORMAT_R8_UINT: return "R8_UINT";
+		case VK_FORMAT_R8G8_UINT: return "R8G8_UINT";
+		case VK_FORMAT_R8G8B8_UINT: return "R8G8B8_UINT";
+		case VK_FORMAT_R8G8B8A8_UINT: return "R8G8B8A8_UINT";
+
+		// 8-bit unorm formats
+		case VK_FORMAT_R8_UNORM: return "R8_UNORM";
+		case VK_FORMAT_R8G8_UNORM: return "R8G8_UNORM";
+		case VK_FORMAT_R8G8B8_UNORM: return "R8G8B8_UNORM";
+		case VK_FORMAT_R8G8B8A8_UNORM: return "R8G8B8A8_UNORM";
+
+		// 8-bit snorm formats
+		case VK_FORMAT_R8_SNORM: return "R8_SNORM";
+		case VK_FORMAT_R8G8_SNORM: return "R8G8_SNORM";
+		case VK_FORMAT_R8G8B8_SNORM: return "R8G8B8_SNORM";
+		case VK_FORMAT_R8G8B8A8_SNORM: return "R8G8B8A8_SNORM";
+
+		// Special formats
+		case VK_FORMAT_B8G8R8A8_UNORM: return "B8G8R8A8_UNORM";
+		case VK_FORMAT_B8G8R8A8_SRGB: return "B8G8R8A8_SRGB";
+
+		default: return "Unknown Format";
+	}
 }
 
 uint32_t VulkanShaderReflection::GetTotalDescriptorCountAcrossAllSets() const

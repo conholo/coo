@@ -129,6 +129,7 @@ void VulkanGraphicsPipeline::SetDynamicState(const VkPipelineDynamicStateCreateI
     m_DynamicState = dynamicState;
     m_DynamicStates = std::move(dynamicStates);
     m_DynamicState.pDynamicStates = m_DynamicStates.data();
+	m_DynamicState.dynamicStateCount = static_cast<uint32_t>(m_DynamicStates.size());
 }
 
 void VulkanGraphicsPipeline::SetLayout(VkPipelineLayout layout)
@@ -186,18 +187,20 @@ void VulkanGraphicsPipelineBuilder::SetupDefaultStates()
     m_RasterizationState.rasterizerDiscardEnable = VK_FALSE;
     m_RasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
     m_RasterizationState.lineWidth = 1.0f;
-    m_RasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
-    m_RasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    m_RasterizationState.cullMode = VK_CULL_MODE_NONE;
+    m_RasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     m_RasterizationState.depthBiasEnable = VK_FALSE;
 
     m_MultisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    m_MultisampleState.sampleShadingEnable = VK_FALSE;
     m_MultisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	m_MultisampleState.pSampleMask = nullptr;
 
+	// Depth and stencil state containing depth and stencil compare and test operations
+	// We only use depth tests and want depth tests and writes to be enabled and compare with less or equal
     m_DepthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     m_DepthStencilState.depthTestEnable = VK_TRUE;
     m_DepthStencilState.depthWriteEnable = VK_TRUE;
-    m_DepthStencilState.depthCompareOp = VK_COMPARE_OP_LESS;
+    m_DepthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
     m_DepthStencilState.depthBoundsTestEnable = VK_FALSE;
     m_DepthStencilState.stencilTestEnable = VK_FALSE;
 
@@ -206,14 +209,19 @@ void VulkanGraphicsPipelineBuilder::SetupDefaultStates()
     m_ColorBlendAttachmentStates[0].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
     m_ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    m_ColorBlendState.logicOpEnable = VK_FALSE;
     m_ColorBlendState.attachmentCount = 1;
     m_ColorBlendState.pAttachments = m_ColorBlendAttachmentStates.data();
 
+	// Viewport state sets the number of viewports and scissor used in this pipeline
+	// Overridden by the dynamic states
     m_ViewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     m_ViewportState.viewportCount = 1;
     m_ViewportState.scissorCount = 1;
 
+	// Enable dynamic states
+	// Most states are baked into the pipeline, but there are still a few dynamic states that can be changed within a command buffer
+	// To be able to change these we need do specify which dynamic states will be changed using this pipeline. Their actual states are set later on in the command buffer.
+	// For this example we will set the viewport and scissor using dynamic states
     m_DynamicStates = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     m_DynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     m_DynamicState.dynamicStateCount = static_cast<uint32_t>(m_DynamicStates.size());
@@ -251,21 +259,11 @@ VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetVertexInputDesc
         m_VertexInputState.vertexBindingDescriptionCount = static_cast<uint32_t>(m_BindingDescriptions.size());
         m_VertexInputState.pVertexBindingDescriptions = m_BindingDescriptions.data();
     }
-    else
-    {
-        m_VertexInputState.vertexBindingDescriptionCount = 0;
-        m_VertexInputState.pVertexBindingDescriptions = nullptr;
-    }
 
     if (!m_AttributeDescriptions.empty())
     {
         m_VertexInputState.vertexAttributeDescriptionCount = static_cast<uint32_t>(m_AttributeDescriptions.size());
         m_VertexInputState.pVertexAttributeDescriptions = m_AttributeDescriptions.data();
-    }
-    else
-    {
-        m_VertexInputState.vertexAttributeDescriptionCount = 0;
-        m_VertexInputState.pVertexAttributeDescriptions = nullptr;
     }
 
     return *this;
@@ -301,6 +299,8 @@ VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetDepthTesting(bo
     m_DepthStencilState.depthTestEnable = enable ? VK_TRUE : VK_FALSE;
     m_DepthStencilState.depthWriteEnable = writeEnable ? VK_TRUE : VK_FALSE;
     m_DepthStencilState.depthCompareOp = compareOp;
+	m_DepthStencilState.back.compareOp = VK_COMPARE_OP_ALWAYS;
+
     return *this;
 }
 
@@ -331,14 +331,6 @@ VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetColorBlendAttac
     return *this;
 }
 
-VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetDynamicStates(const std::vector<VkDynamicState>& dynamicStates)
-{
-    m_DynamicStates = dynamicStates;
-    m_DynamicState.dynamicStateCount = static_cast<uint32_t>(m_DynamicStates.size());
-    m_DynamicState.pDynamicStates = m_DynamicStates.data();
-    return *this;
-}
-
 VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetLayout(VkPipelineLayout layout)
 {
     m_PipelineLayout = layout;
@@ -359,8 +351,7 @@ VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetRenderPass(cons
         {
             VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
             colorBlendAttachment.blendEnable = VK_FALSE;
-            colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+            colorBlendAttachment.colorWriteMask = 0xf;
             m_ColorBlendAttachmentStates.push_back(colorBlendAttachment);
         }
     }

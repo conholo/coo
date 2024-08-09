@@ -3,39 +3,35 @@
 #include "engine_utils.h"
 #include "core/event/mouse_event.h"
 
-void CreateGameObjects(Scene& scene, VulkanRenderer& renderer)
+void Application::CreateGameObjects(Scene& scene, VulkanRenderer& renderer)
 {
     TextureSpecification spec
     {
         .Usage = TextureUsage::Texture,
-        .DebugName = "Test Texture",
     };
-    auto emptyImage = VulkanTexture2D::CreateFromFile(spec, "../assets/textures/missing.png");
+	spec.DebugName = "Lava Texture";
+	auto lavaTexture = VulkanTexture2D::CreateFromFile(spec, "../assets/textures/marble.png");
+	spec.DebugName = "Marble Texture";
+	auto marbleTexture = VulkanTexture2D::CreateFromFile(spec, "../assets/textures/lava.png");
 
-    auto bunnyModel = VulkanModel::CreateModelFromFile("../assets/models/bunny.obj");
-    auto suzanneModel = VulkanModel::CreateModelFromFile("../assets/models/suzanne.obj");
+    auto cubeModel = VulkanModel::CreateModelFromFile("../assets/models/cube.obj");
     auto quadModel = VulkanModel::CreateModelFromFile("../assets/models/quad.obj");
 
-    auto &bunny = scene.CreateGameObject(renderer);
-    bunny.ObjectModel = bunnyModel;
-    bunny.ObjectTransform.Translation = {-0.5f, 0.0f, 0.085f};
-    bunny.ObjectTransform.Scale = {0.25, 0.25, 0.25};
-    bunny.ObjectTransform.Rotation = {90.0f, 0.0f, 0.0f};
-    bunny.DiffuseMap = bunny.NormalMap = emptyImage;
-
-    auto &suzanne = scene.CreateGameObject(renderer);
-    suzanne.ObjectModel = suzanneModel;
-    suzanne.ObjectTransform.Translation = {.5f, 0.0f, 0.35f};
-    suzanne.ObjectTransform.Scale = {0.35, 0.35, 0.35};
-    suzanne.ObjectTransform.Rotation = {90.0f, 0.0f, 0.0f};
-    suzanne.DiffuseMap = suzanne.NormalMap = emptyImage;
+    auto& cubeA = scene.CreateGameObject(renderer);
+	cubeA.ObjectModel = cubeModel;
+	cubeA.ObjectTransform.Translation = {-0.5f, 0.0f, 2.0f};
+	cubeA.ObjectTransform.Scale = {0.25, 0.25, 0.25};
+	cubeA.ObjectTransform.Rotation = {0.0f, 0.0f, 0.0f};
+	cubeA.DiffuseMap = marbleTexture;
+	cubeA.NormalMap = lavaTexture;
 
     auto &floor = scene.CreateGameObject(renderer);
     floor.ObjectModel = quadModel;
     floor.ObjectTransform.Translation = {0.0f, 0.0f, 0.0};
     floor.ObjectTransform.Scale = {3.f, 1.0f, 3.f};
     floor.ObjectTransform.Rotation = {270.0, 0.0, 0.0};
-    floor.DiffuseMap = floor.NormalMap = emptyImage;
+	floor.DiffuseMap = marbleTexture;
+	floor.NormalMap = lavaTexture;
 }
 
 Application::Application()
@@ -70,22 +66,21 @@ void Application::Run()
         auto deltaTime = std::chrono::duration<float>(newTime - currentTime).count();
         currentTime = newTime;
 
-        m_Scene->UpdateGameObjectUboBuffers(m_FrameIndex);
+		uint32_t frameIndex = m_Renderer->GetCurrentFrameIndex();
+        m_Scene->UpdateGameObjectUboBuffers(frameIndex);
         m_Camera.Tick(deltaTime);
 
         FrameInfo frameInfo
         {
-            .FrameCounter = m_FrameCounter,
-            .FrameIndex = m_FrameIndex,
+            .FrameIndex = frameIndex,
             .DeltaTime = deltaTime,
             .ActiveScene = *m_Scene,
             .Cam = m_Camera
         };
-        m_Renderer->Render(frameInfo);
-
-        m_FrameCounter++;
-        m_FrameIndex = (m_FrameIndex + 1) % VulkanSwapchain::MAX_FRAMES_IN_FLIGHT;
+		m_Renderer->Render(frameInfo);
     }
+
+	vkDeviceWaitIdle(VulkanContext::Get().Device());
 }
 
 void Application::OnEvent(Event& event)
@@ -106,5 +101,5 @@ bool Application::OnWindowResize(WindowResizedEvent& event)
 {
     std::cout << "Window resize event: " << event.GetWidth() << ", " << event.GetHeight() << "\n";
     m_Camera.SetPerspectiveProjection(90.0f, event.GetWidth() / event.GetHeight(), 0.1f, 1000.0f);
-    return false;
+    return true;
 }

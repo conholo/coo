@@ -1,45 +1,53 @@
 #pragma once
 
-#include "vulkan_render_pass.h"
+#include "core/frame_info.h"
+#include "irenderer.h"
 #include "vulkan_framebuffer.h"
 #include "vulkan_graphics_pipeline.h"
 #include "vulkan_image.h"
 #include "vulkan_material.h"
-#include "core/frame_info.h"
+#include "vulkan_render_pass.h"
 #include "vulkan_texture.h"
 
 class VulkanRenderer;
-class VulkanDeferredRenderer
+class VulkanDeferredRenderer : public IRenderer
 {
 public:
     explicit VulkanDeferredRenderer(VulkanRenderer* renderer);
-    ~VulkanDeferredRenderer();
+    ~VulkanDeferredRenderer() override;
 
-    void Initialize();
-
-    void Render(FrameInfo& frameInfo);
-    void Resize(uint32_t width, uint32_t height);
-
-    void RegisterGameObject(GameObject& gameObjectRef);
+    void Initialize() override;
+    void Shutdown() override;
+    void Render(FrameInfo& frameInfo) override;
+    void Resize(uint32_t width, uint32_t height) override;
+    void RegisterGameObject(GameObject& gameObjectRef) override;
 
 private:
+
+	void RecordGBufferCommandBuffer(FrameInfo& frameInfo);
+	void RecordLightingPassCommandBuffer(FrameInfo& frameInfo);
+	void RecordCompositionPassCommandBuffer(FrameInfo& frameInfo);
+	void SubmitRenderPasses(uint32_t frameIndex);
 
     void CreateGBufferResources();
     void CreateGBufferTextures();
     void CreateGBufferRenderPass();
     void CreateGBufferPipeline();
-    void CreateOrInvalidateGBufferFramebuffers();
+    void CreateGBufferFramebuffers();
 
     void CreateLightingResources();
     void CreateLightingTextures();
     void CreateLightingRenderPass();
     void CreateLightingPipeline();
-    void CreateOrInvalidateLightingFramebuffers();
+    void CreateLightingFramebuffers();
 
     void CreateCompositionResources();
     void CreateCompositionRenderPass();
     void CreateCompositionPipeline();
-    void CreateOrInvalidateCompositionFramebuffers();
+    void CreateCompositionFramebuffers();
+
+	void CreateCommandBuffers();
+	void CreateSynchronizationPrimitives();
 
 private:
     VulkanRenderer *m_Renderer;
@@ -49,6 +57,14 @@ private:
      */
     std::vector<std::vector<std::shared_ptr<VulkanTexture2D>>> m_GBufferTextures{VulkanSwapchain::MAX_FRAMES_IN_FLIGHT};
     std::vector<std::shared_ptr<VulkanTexture2D>> m_LightingTextures{VulkanSwapchain::MAX_FRAMES_IN_FLIGHT};
+
+	std::vector<VkCommandBuffer> m_GBufferCommandBuffers;
+	std::vector<VkCommandBuffer> m_LightingCommandBuffers;
+
+	std::vector<VkSemaphore> m_GBufferCompleteSemaphores;
+	std::vector<VkSemaphore> m_LightingCompleteSemaphores;
+	std::vector<VkSemaphore> m_CompositionRenderCompleteSemaphores;
+	std::vector<VkFence> m_GBufferCompleteFence;
 
     // These framebuffers will be resized on creation or resize.
     std::vector<std::unique_ptr<VulkanFramebuffer>> m_GBufferFramebuffers;
@@ -84,4 +100,6 @@ private:
 
     std::shared_ptr<VulkanMaterialLayout> m_CompositionMaterialLayout;
     std::shared_ptr<VulkanMaterial> m_CompositionMaterial;
+
+	std::shared_ptr<VulkanTexture2D> m_SimpleTextureA;
 };

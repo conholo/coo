@@ -6,11 +6,6 @@
 #include <stdexcept>
 #include <iostream>
 
-static void GLFWErrorCallback(int error, const char* description)
-{
-    std::cout << "GLFW Error: " << description << "\n";
-}
-
 Window::Window(const WindowProperties& properties)
 {
     Initialize(properties);
@@ -27,8 +22,6 @@ void Window::Initialize(const WindowProperties& properties)
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
-    glfwSetErrorCallback(GLFWErrorCallback);
 
     m_Data.Title = properties.Title;
     m_Data.Width = properties.Width;
@@ -40,20 +33,22 @@ void Window::Initialize(const WindowProperties& properties)
     glfwSetWindowCloseCallback(m_WindowHandle, [](GLFWwindow* window)
     {
         WindowData& data = *(static_cast<WindowData*>(glfwGetWindowUserPointer(window)));
-
         WindowClosedEvent windowClosedEvent;
         data.Callback(windowClosedEvent);
     });
 
-    glfwSetWindowSizeCallback(m_WindowHandle, [](GLFWwindow* window, int width, int height) {
-        WindowData& data = *(static_cast<WindowData*>(glfwGetWindowUserPointer(window)));
-        data.Width = width;
-        data.Height = height;
-        data.WasWindowResized = true;
+	glfwSetFramebufferSizeCallback(m_WindowHandle, [](GLFWwindow* window, int width, int height)
+	{
+		std::cout << "Received GLFW OnFramebufferSizeCallback!" << "\n";
 
-        WindowResizedEvent windowResizedEvent(width, height);
-        data.Callback(windowResizedEvent);
-    });
+		WindowData& data = *(static_cast<WindowData*>(glfwGetWindowUserPointer(window)));
+		data.Width = width;
+		data.Height = height;
+		data.WasWindowResized = true;
+
+		WindowResizedEvent windowResizedEvent(width, height);
+		data.Callback(windowResizedEvent);
+	});
 
     glfwSetWindowPosCallback(m_WindowHandle, [](GLFWwindow* window, int xPosition, int yPosition) {
         WindowData& data = *(static_cast<WindowData*>(glfwGetWindowUserPointer(window)));

@@ -36,11 +36,13 @@ public:
     VulkanImage2D& operator=(const VulkanImage2D&) = delete;
 
     void Release();
+	void ReleaseSwapchainResources();
     void Invalidate();
     void Resize(uint32_t width, uint32_t height);
 
     VulkanImageView* GetView(uint32_t mip = 0);
     void TransitionLayout(VkCommandBuffer cmd, VkImageLayout newLayout, uint32_t baseMipLevel = 0, uint32_t levelCount = VK_REMAINING_MIP_LEVELS);
+    void TransitionLayout(VkImageLayout newLayout, uint32_t baseMipLevel = 0, uint32_t levelCount = VK_REMAINING_MIP_LEVELS);
     const VkDescriptorImageInfo& GetDescriptorInfo(uint32_t mip = 0) const;
     void CopyFromBufferAndGenerateMipmaps(VkBuffer buffer, VkDeviceSize bufferSize, uint32_t mipLevels);
 

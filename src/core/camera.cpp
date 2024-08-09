@@ -150,7 +150,6 @@ bool Camera::OnScroll(MouseScrolledEvent& mouseScrolledEvent)
 
 void Camera::OnEvent(Event &event)
 {
-    std::cout << "Prorcessng Event" << "\n";
     EventDispatcher dispatcher(event);
     dispatcher.Dispatch<MouseScrolledEvent>(BIND_FN(Camera::OnScroll));
     dispatcher.Dispatch<MouseMovedEvent>(BIND_FN(Camera::OnMouseMove));

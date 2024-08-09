@@ -54,7 +54,7 @@ public:
             VkDependencyFlags dependencyFlags);
     void Build();
 
-    void BeginPass(VkCommandBuffer commandBuffer, VkRenderPassBeginInfo beginInfo, VulkanSwapchain& swapchainRef);
+    void BeginPass(VkCommandBuffer commandBuffer, VkRenderPassBeginInfo beginInfo, VkExtent2D extent);
     void EndPass(VkCommandBuffer commandBuffer);
 
     VkRenderPass RenderPass() const { return m_RenderPass; }

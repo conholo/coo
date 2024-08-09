@@ -50,9 +50,10 @@ public:
     bool HasMipmaps() const;
 
     VulkanImage2D* GetImage() const { return m_Image.get(); }
-    const VkDescriptorImageInfo& GetBaseViewDescriptorInfo() const { return m_DescriptorInfo; }
+    VkDescriptorImageInfo GetBaseViewDescriptorInfo() const { return m_DescriptorInfo; }
 
     void UpdateState(VkImageLayout expectedLayout);
+	void TransitionLayout(VkImageLayout newLayout);
     void TransitionLayout(VkCommandBuffer cmd, VkImageLayout newLayout);
 
 private:

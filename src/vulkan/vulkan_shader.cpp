@@ -40,9 +40,10 @@ std::vector<uint32_t> VulkanShader::Compile()
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
 
-    options.SetOptimizationLevel(shaderc_optimization_level_performance);
+    options.SetOptimizationLevel(shaderc_optimization_level_zero);
+	options.SetGenerateDebugInfo();
+	options.SetSourceLanguage(shaderc_source_language_glsl);
 
-    // Determine shader kind
     shaderc_shader_kind kind;
     switch (m_Type)
     {

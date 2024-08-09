@@ -75,16 +75,16 @@ VkDescriptorBufferInfo GameObject::GetBufferInfo(int frameIndex)
     return m_Scene.GetBufferInfoForGameObject(frameIndex, m_Id);
 }
 
-void GameObject::Render(FrameInfo& frameInfo)
+void GameObject::Render(VkCommandBuffer cmd, uint32_t frameIndex, VkDescriptorBufferInfo globalUboInfo)
 {
-    Material->UpdateDescriptorSets(frameInfo.FrameIndex,
+    Material->UpdateDescriptorSets(frameIndex,
     {
        {0,
            {
                {
                    .binding = 0,
                    .type = DescriptorUpdate::Type::Buffer,
-                   .bufferInfo =  frameInfo.GlobalUbo->DescriptorInfo()
+                   .bufferInfo =  globalUboInfo
                }
            }
        },
@@ -93,7 +93,7 @@ void GameObject::Render(FrameInfo& frameInfo)
                {
                    .binding = 0,
                    .type = DescriptorUpdate::Type::Buffer,
-                   .bufferInfo = GetBufferInfo(frameInfo.FrameIndex)
+                   .bufferInfo = GetBufferInfo(frameIndex)
                },
                {
                    .binding = 1,
@@ -109,9 +109,9 @@ void GameObject::Render(FrameInfo& frameInfo)
        }
    });
 
-    Material->BindDescriptors(frameInfo.FrameIndex, frameInfo.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS);
-    Material->BindPushConstants(frameInfo.CommandBuffer);
-    ObjectModel->BindVertexInput(frameInfo.CommandBuffer);
-    ObjectModel->Draw(frameInfo.CommandBuffer);
+    Material->BindDescriptors(frameIndex, cmd, VK_PIPELINE_BIND_POINT_GRAPHICS);
+    Material->BindPushConstants(cmd);
+    ObjectModel->BindVertexInput(cmd);
+    ObjectModel->Draw(cmd);
 }
 

@@ -43,4 +43,6 @@ private:
 private:
     QueueFamilyIndices m_QueueFamilyIndices{};
     SwapchainSupportDetails m_SwapchainSupportDetails{};
+
+	friend class VulkanContext;
 };

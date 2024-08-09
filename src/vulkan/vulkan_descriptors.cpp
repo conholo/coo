@@ -159,7 +159,7 @@ VulkanDescriptorWriter::VulkanDescriptorWriter(VulkanDescriptorSetLayout& setLay
 {
 }
 
-VulkanDescriptorWriter& VulkanDescriptorWriter::WriteBuffer(uint32_t binding, const VkDescriptorBufferInfo* bufferInfo)
+VulkanDescriptorWriter& VulkanDescriptorWriter::WriteBuffer(uint32_t binding, const VkDescriptorBufferInfo& bufferInfo)
 {
     assert(m_SetLayout.m_Descriptors.count(binding) == 1 && "Layout does not contain specified binding");
 
@@ -171,14 +171,14 @@ VulkanDescriptorWriter& VulkanDescriptorWriter::WriteBuffer(uint32_t binding, co
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.descriptorType = bindingDescription.descriptorType;
     write.dstBinding = binding;
-    write.pBufferInfo = bufferInfo;
+    write.pBufferInfo = &bufferInfo;
     write.descriptorCount = 1;
 
     m_Writes.push_back(write);
     return *this;
 }
 
-VulkanDescriptorWriter& VulkanDescriptorWriter::WriteImage(uint32_t binding, const VkDescriptorImageInfo* imageInfo)
+VulkanDescriptorWriter& VulkanDescriptorWriter::WriteImage(uint32_t binding, const VkDescriptorImageInfo& imageInfo)
 {
     assert(m_SetLayout.m_Descriptors.count(binding) == 1 && "Layout does not contain specified binding");
 
@@ -192,7 +192,7 @@ VulkanDescriptorWriter& VulkanDescriptorWriter::WriteImage(uint32_t binding, con
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.descriptorType = bindingDescription.descriptorType;
     write.dstBinding = binding;
-    write.pImageInfo = imageInfo;
+    write.pImageInfo = &imageInfo;
     write.descriptorCount = 1;
 
     m_Writes.push_back(write);

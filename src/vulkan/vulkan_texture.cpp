@@ -121,7 +121,7 @@ void VulkanTexture2D::Resize(uint32_t width, uint32_t height)
 
     m_Specification.Width = width;
     m_Specification.Height = height;
-    Invalidate();
+    Invalidate(true);
 }
 
 void VulkanTexture2D::LoadFromFile(const std::string& filepath)
@@ -260,6 +260,14 @@ void VulkanTexture2D::CreateEmptyTextureImage()
 void VulkanTexture2D::UpdateDescriptorInfo()
 {
     m_DescriptorInfo = m_Image->GetDescriptorInfo();
+}
+
+void VulkanTexture2D::TransitionLayout(VkImageLayout newLayout)
+{
+	auto cmd = VulkanContext::Get().BeginSingleTimeCommands();
+	m_Image->TransitionLayout(cmd, newLayout);
+	UpdateDescriptorInfo();
+	VulkanContext::Get().EndSingleTimeCommand(cmd);
 }
 
 void VulkanTexture2D::TransitionLayout(VkCommandBuffer cmd, VkImageLayout newLayout)

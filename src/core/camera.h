@@ -47,7 +47,7 @@ public:
     const glm::mat4& GetView() const { return m_ViewMatrix; }
     const glm::mat4& GetInvView() const { return m_InvViewMatrix; }
     const glm::mat4& GetInvProjection() const { return m_InverseProjectionMatrix; }
-    glm::vec3 GetPosition() { return {m_InvViewMatrix[3] }; }
+    glm::vec3 GetPosition() { return { m_InvViewMatrix[3] }; }
 
     void Tick(float deltaTime);
     void OnEvent(Event &event);

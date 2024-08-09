@@ -19,11 +19,10 @@ private:
     bool OnWindowClose(WindowClosedEvent& event);
     bool OnWindowResize(WindowResizedEvent& event);
 
+	void CreateGameObjects(Scene& scene, VulkanRenderer& renderer);
+
     std::shared_ptr<Window> m_Window;
     std::unique_ptr<VulkanRenderer> m_Renderer;
     std::unique_ptr<Scene> m_Scene;
-
     Camera m_Camera;
-    size_t m_FrameCounter = 0;
-    uint8_t m_FrameIndex = 0;
 };
