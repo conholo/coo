@@ -112,28 +112,6 @@ void VulkanMaterial::UpdateDescriptorSets(uint32_t frameIndex, const std::vector
     }
 }
 
-template<typename T>
-void VulkanMaterial::SetPushConstant(const std::string& name, const T& value)
-{
-    const auto& pushConstantRanges = m_Layout->GetPushConstantRanges();
-    auto it = std::find_if(pushConstantRanges.begin(), pushConstantRanges.end(),
-                           [&name](const VulkanMaterialLayout::PushConstantRange& range) { return range.name == name; });
-
-    if (it == pushConstantRanges.end())
-    {
-        throw std::runtime_error("Push constant not found: " + name);
-    }
-
-    if (sizeof(T) > it->size)
-    {
-        throw std::runtime_error("Push constant data too large for: " + name);
-    }
-
-    std::vector<uint8_t> data(sizeof(T));
-    memcpy(data.data(), &value, sizeof(T));
-    m_PushConstantData[name] = std::move(data);
-}
-
 void VulkanMaterial::BindPushConstants(VkCommandBuffer commandBuffer)
 {
     const auto& pushConstantRanges = m_Layout->GetPushConstantRanges();
