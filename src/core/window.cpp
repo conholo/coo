@@ -39,8 +39,6 @@ void Window::Initialize(const WindowProperties& properties)
 
 	glfwSetFramebufferSizeCallback(m_WindowHandle, [](GLFWwindow* window, int width, int height)
 	{
-		std::cout << "Received GLFW OnFramebufferSizeCallback!" << "\n";
-
 		WindowData& data = *(static_cast<WindowData*>(glfwGetWindowUserPointer(window)));
 		data.Width = width;
 		data.Height = height;

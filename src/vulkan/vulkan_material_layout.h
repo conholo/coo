@@ -19,7 +19,6 @@ public:
     VulkanMaterialLayout(std::shared_ptr<VulkanShader> vertexShader, std::shared_ptr<VulkanShader> fragmentShader);
     ~VulkanMaterialLayout();
 
-    // Disable copying
     VulkanMaterialLayout(const VulkanMaterialLayout&) = delete;
     VulkanMaterialLayout& operator=(const VulkanMaterialLayout&) = delete;
 

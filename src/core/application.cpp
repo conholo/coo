@@ -46,7 +46,7 @@ Application::Application()
     m_Scene = std::make_unique<Scene>();
     CreateGameObjects(*m_Scene, *m_Renderer);
 
-    m_Camera.SetPerspectiveProjection(90.0f, m_Window->GetExtent().width / m_Window->GetExtent().height, 0.1, 1000.0);
+    m_Camera.SetPerspectiveProjection(90.0f, m_Window->GetExtent().width / m_Window->GetExtent().height, 0.01, 1000.0);
 }
 
 Application::~Application()
@@ -93,13 +93,11 @@ void Application::OnEvent(Event& event)
 
 bool Application::OnWindowClose(WindowClosedEvent& event)
 {
-    std::cout << "Window close event\n";
     return true;
 }
 
 bool Application::OnWindowResize(WindowResizedEvent& event)
 {
-    std::cout << "Window resize event: " << event.GetWidth() << ", " << event.GetHeight() << "\n";
-    m_Camera.SetPerspectiveProjection(90.0f, event.GetWidth() / event.GetHeight(), 0.1f, 1000.0f);
+    m_Camera.SetPerspectiveProjection(90.0f, event.GetWidth() / event.GetHeight(), 0.01f, 1000.0f);
     return true;
 }

@@ -23,31 +23,33 @@ public:
     void RegisterGameObject(GameObject& gameObjectRef) override;
 
 private:
-
 	void RecordGBufferCommandBuffer(FrameInfo& frameInfo);
 	void RecordLightingPassCommandBuffer(FrameInfo& frameInfo);
 	void RecordCompositionPassCommandBuffer(FrameInfo& frameInfo);
 	void SubmitRenderPasses(uint32_t frameIndex);
 
-    void CreateGBufferResources();
+    void InvalidateGBufferPass();
     void CreateGBufferTextures();
     void CreateGBufferRenderPass();
     void CreateGBufferPipeline();
     void CreateGBufferFramebuffers();
 
-    void CreateLightingResources();
+    void InvalidateLightingPass();
     void CreateLightingTextures();
     void CreateLightingRenderPass();
     void CreateLightingPipeline();
     void CreateLightingFramebuffers();
 
-    void CreateCompositionResources();
+    void InvalidateCompositionPass();
     void CreateCompositionRenderPass();
     void CreateCompositionPipeline();
     void CreateCompositionFramebuffers();
 
 	void CreateCommandBuffers();
 	void CreateSynchronizationPrimitives();
+	void CreateShaders();
+	void CreateMaterials();
+	void CreateAttachmentTextures();
 
 private:
     VulkanRenderer *m_Renderer;

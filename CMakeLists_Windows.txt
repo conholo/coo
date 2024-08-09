@@ -1,3 +1,5 @@
+include(.env.cmake)
+
 message(STATUS "CREATING BUILD FOR WINDOWS")
 
 # Vulkan SDK setup
