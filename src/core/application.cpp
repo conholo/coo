@@ -1,6 +1,10 @@
 #include "application.h"
-#include "engine_utils.h"
+
 #include "core/event/mouse_event.h"
+#include "engine_utils.h"
+#include "platform_path.h"
+
+#include <chrono>
 
 void Application::CreateGameObjects(Scene& scene, VulkanRenderer& renderer)
 {
@@ -8,18 +12,22 @@ void Application::CreateGameObjects(Scene& scene, VulkanRenderer& renderer)
     {
         .Usage = TextureUsage::Texture,
     };
+
+	auto textureDirectory = FileSystemUtil::GetTextureDirectory();
+
 	spec.DebugName = "Marble Color Texture";
-	auto marbleColor = VulkanTexture2D::CreateFromFile(spec, "../assets/textures/marble/color.jpg");
+	auto marbleColor = VulkanTexture2D::CreateFromFile(spec, FileSystemUtil::PathToString(textureDirectory / "marble/color.jpg"));
 	spec.DebugName = "Marble Normal Texture";
-	auto marbleNormal = VulkanTexture2D::CreateFromFile(spec, "../assets/textures/marble/normal.jpg");
+	auto marbleNormal = VulkanTexture2D::CreateFromFile(spec, FileSystemUtil::PathToString(textureDirectory / "marble/normal.jpg"));
 
 	spec.DebugName = "Paving Stones Color Texture";
-	auto pavingStonesColor = VulkanTexture2D::CreateFromFile(spec, "../assets/textures/paving_stones/color.jpg");
+	auto pavingStonesColor = VulkanTexture2D::CreateFromFile(spec, FileSystemUtil::PathToString(textureDirectory / "paving_stones/color.jpg"));
 	spec.DebugName = "Paving Stones Normal Texture";
-	auto pavingStonesNormal = VulkanTexture2D::CreateFromFile(spec, "../assets/textures/paving_stones/normal.jpg");
+	auto pavingStonesNormal = VulkanTexture2D::CreateFromFile(spec, FileSystemUtil::PathToString(textureDirectory / "paving_stones/normal.jpg"));
 
-    auto cubeModel = VulkanModel::CreateModelFromFile("../assets/models/cube.obj");
-    auto quadModel = VulkanModel::CreateModelFromFile("../assets/models/quad.obj");
+	auto modelDirectory = FileSystemUtil::GetModelDirectory();
+    auto cubeModel = VulkanModel::CreateModelFromFile(FileSystemUtil::PathToString(modelDirectory /  "cube.obj"));
+    auto quadModel = VulkanModel::CreateModelFromFile(FileSystemUtil::PathToString(modelDirectory /  "quad.obj"));
 
     auto& cubeA = scene.CreateGameObject(renderer);
 	cubeA.ObjectModel = cubeModel;

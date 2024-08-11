@@ -1,8 +1,11 @@
 #include "vulkan_shader.h"
+
+#include "core/platform_path.h"
 #include "vulkan_context.h"
+
 #include <fstream>
-#include <stdexcept>
 #include <shaderc/shaderc.hpp>
+#include <stdexcept>
 
 VulkanShader::VulkanShader(std::string filePath, ShaderType type)
     : m_FilePath(std::move(filePath)), m_Type(type)
@@ -23,16 +26,14 @@ VulkanShader::~VulkanShader()
 
 void VulkanShader::Load()
 {
-    std::ifstream file(m_FilePath, std::ios::ate | std::ios::binary);
-    if (!file.is_open())
-        throw std::runtime_error("Failed to open file: " + m_FilePath);
-
-    size_t fileSize = (size_t)file.tellg();
-    m_ShaderSource.resize(fileSize);
-
-    file.seekg(0);
-    file.read(m_ShaderSource.data(), fileSize);
-    file.close();
+	try
+	{
+		m_ShaderSource = FileSystemUtil::ReadFileToString(m_FilePath);
+	}
+	catch (const std::runtime_error& e)
+	{
+		throw std::runtime_error("Failed to load shader: " + std::string(e.what()));
+	}
 }
 
 std::vector<uint32_t> VulkanShader::Compile()

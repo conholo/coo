@@ -1,5 +1,6 @@
 #include "vulkan_deferred_renderer.h"
 
+#include "core/platform_path.h"
 #include "vulkan_model.h"
 #include "vulkan_renderer.h"
 #include "vulkan_utils.h"
@@ -159,11 +160,18 @@ void VulkanDeferredRenderer::CreateAttachmentTextures()
 
 void VulkanDeferredRenderer::CreateShaders()
 {
-	m_FullScreenQuadVertexShader = std::make_shared<VulkanShader>("../assets/shaders/fsq.vert", ShaderType::Vertex);
-	m_GBufferVertexShader = std::make_shared<VulkanShader>("../assets/shaders/gbuffer.vert", ShaderType::Vertex);
-	m_GBufferFragmentShader = std::make_shared<VulkanShader>("../assets/shaders/gbuffer.frag", ShaderType::Fragment);
-	m_LightingFragmentShader = std::make_shared<VulkanShader>("../assets/shaders/lighting.frag", ShaderType::Fragment);
-	m_CompositionFragmentShader = std::make_shared<VulkanShader>("../assets/shaders/texture_display.frag", ShaderType::Fragment);
+	auto shaderDirectory = FileSystemUtil::GetShaderDirectory();
+	auto fsqPath = FileSystemUtil::PathToString(shaderDirectory / "fsq.vert");
+	auto gBufferVertPath = FileSystemUtil::PathToString(shaderDirectory / "gbuffer.vert");
+	auto gBufferFragPath = FileSystemUtil::PathToString(shaderDirectory / "gbuffer.frag");
+	auto lightingFragPath = FileSystemUtil::PathToString(shaderDirectory / "lighting.frag");
+	auto compositionFragPath = FileSystemUtil::PathToString(shaderDirectory / "texture_display.frag");
+
+	m_FullScreenQuadVertexShader = std::make_shared<VulkanShader>(fsqPath, ShaderType::Vertex);
+	m_GBufferVertexShader = std::make_shared<VulkanShader>(gBufferVertPath, ShaderType::Vertex);
+	m_GBufferFragmentShader = std::make_shared<VulkanShader>(gBufferFragPath, ShaderType::Fragment);
+	m_LightingFragmentShader = std::make_shared<VulkanShader>(lightingFragPath, ShaderType::Fragment);
+	m_CompositionFragmentShader = std::make_shared<VulkanShader>(compositionFragPath, ShaderType::Fragment);
 }
 
 void VulkanDeferredRenderer::CreateMaterials()
