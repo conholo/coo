@@ -8,6 +8,7 @@
 #include "vulkan_context.h"
 #include "vulkan_image_utils.h"
 
+
 struct ImageSpecification
 {
     std::string DebugName;
@@ -20,6 +21,7 @@ struct ImageSpecification
     uint32_t Mips = 1;
     uint32_t Layers = 1;
     bool CreateSampler = true;
+	SamplerSpecification SamplerSpec{};
     VkImage ExistingImage = VK_NULL_HANDLE;  // For swapchain images
     VkFormat SwapchainFormat = VK_FORMAT_UNDEFINED;
 };

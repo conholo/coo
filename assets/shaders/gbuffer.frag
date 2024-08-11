@@ -28,6 +28,8 @@ void main()
     mat3 TBN = mat3(T, B, N);
 
     vec3 tNormals = TBN * normalize(texture(u_NormalMap, v_UV).xyz * 2.0 - vec3(1.0));
-    o_Normal = vec4(N, 1.0);
-    o_Albedo = vec4(texture(u_DiffuseMap, v_UV).rgb, 1.0);
+    o_Normal = vec4(tNormals, 1.0);
+
+    vec3 linearColor = decode(texture(u_DiffuseMap, v_UV).rgb);
+    o_Albedo = vec4(linearColor, 1.0);
 }

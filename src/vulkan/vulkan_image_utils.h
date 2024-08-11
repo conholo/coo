@@ -3,6 +3,14 @@
 #include <cassert>
 #include <glm/gtc/integer.hpp>
 
+struct SamplerSpecification
+{
+	VkFilter MinFilter = VK_FILTER_LINEAR;
+	VkFilter MagFilter = VK_FILTER_LINEAR;
+	VkSamplerMipmapMode MipMapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	VkSamplerAddressMode AddressModeU, AddressModeV, AddressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+};
+
 enum class ImageFormat
 {
     None = 0,

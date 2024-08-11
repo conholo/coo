@@ -10,19 +10,6 @@ VulkanDeferredRenderer::VulkanDeferredRenderer(VulkanRenderer* renderer) : m_Ren
 {
 }
 
-VulkanDeferredRenderer::~VulkanDeferredRenderer()
-{
-	vkFreeCommandBuffers(VulkanContext::Get().Device(), VulkanContext::Get().GraphicsCommandPool(), m_GBufferCommandBuffers.size(),
-		m_GBufferCommandBuffers.data());
-	vkFreeCommandBuffers(VulkanContext::Get().Device(), VulkanContext::Get().GraphicsCommandPool(), m_LightingCommandBuffers.size(),
-		m_LightingCommandBuffers.data());
-
-	for (auto semaphore : m_GBufferCompleteSemaphores)
-		vkDestroySemaphore(VulkanContext::Get().Device(), semaphore, nullptr);
-	for (auto semaphore : m_LightingCompleteSemaphores)
-		vkDestroySemaphore(VulkanContext::Get().Device(), semaphore, nullptr);
-}
-
 void VulkanDeferredRenderer::Initialize()
 {
 	CreateCommandBuffers();
@@ -38,6 +25,93 @@ void VulkanDeferredRenderer::Initialize()
 
 void VulkanDeferredRenderer::Shutdown()
 {
+	auto& contextRef = VulkanContext::Get();
+	auto device = contextRef.Device();
+	vkFreeCommandBuffers(
+		device,
+		contextRef.GraphicsCommandPool(),
+		static_cast<uint32_t>(m_GBufferCommandBuffers.size()),
+		m_GBufferCommandBuffers.data());
+	m_GBufferCommandBuffers.clear();
+
+	vkFreeCommandBuffers(
+		device,
+		contextRef.GraphicsCommandPool(),
+		static_cast<uint32_t>(m_LightingCommandBuffers.size()),
+		m_LightingCommandBuffers.data());
+	m_LightingCommandBuffers.clear();
+
+	for (size_t i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		vkDestroySemaphore(device, m_GBufferCompleteSemaphores[i], nullptr);
+		m_GBufferCompleteSemaphores[i] = VK_NULL_HANDLE;
+		vkDestroySemaphore(device, m_LightingCompleteSemaphores[i], nullptr);
+		m_LightingCompleteSemaphores[i] = VK_NULL_HANDLE;
+		vkDestroySemaphore(device, m_CompositionRenderCompleteSemaphores[i], nullptr);
+		m_CompositionRenderCompleteSemaphores[i] = VK_NULL_HANDLE;
+	}
+	m_GBufferCompleteSemaphores.clear();
+	m_LightingCompleteSemaphores.clear();
+	m_CompositionRenderCompleteSemaphores.clear();
+
+	// Textures/Attachments
+	m_GBufferTextures.clear();
+	m_LightingTextures.clear();
+
+	// Render Passes
+	m_GBufferPass.reset();
+	m_GBufferPass = nullptr;
+	m_LightingPass.reset();
+	m_LightingPass = nullptr;
+	m_CompositionPass.reset();
+	m_CompositionPass = nullptr;
+
+	// Pipelines
+	m_GBufferPipeline.reset();
+	m_GBufferPipeline = nullptr;
+
+	m_LightingPipeline.reset();
+	m_LightingPipeline = nullptr;
+
+	m_CompositionPipeline.reset();
+	m_CompositionPipeline = nullptr;
+
+	// Framebuffers
+	m_GBufferFramebuffers.clear();
+	m_LightingFramebuffers.clear();
+	m_CompositionFramebuffers.clear();
+
+	// Materials/Layouts
+	m_GBufferMaterialLayout.reset();
+	m_GBufferMaterialLayout = nullptr;
+	m_GBufferBaseMaterial.reset();
+	m_GBufferBaseMaterial = nullptr;
+
+	m_LightingMaterialLayout.reset();
+	m_LightingMaterialLayout = nullptr;
+	m_LightingMaterial.reset();
+	m_LightingMaterial = nullptr;
+
+	m_CompositionMaterialLayout.reset();
+	m_CompositionMaterialLayout = nullptr;
+	m_CompositionMaterial.reset();
+	m_CompositionMaterial = nullptr;
+
+	// Shaders
+	m_FullScreenQuadVertexShader.reset();
+	m_FullScreenQuadVertexShader = nullptr;
+
+	m_GBufferVertexShader.reset();
+	m_GBufferVertexShader = nullptr;
+
+	m_GBufferFragmentShader.reset();
+	m_GBufferFragmentShader = nullptr;
+
+	m_LightingFragmentShader.reset();
+	m_LightingFragmentShader = nullptr;
+
+	m_CompositionFragmentShader.reset();
+	m_CompositionFragmentShader = nullptr;
 }
 
 void VulkanDeferredRenderer::RegisterGameObject(GameObject& gameObjectRef)
@@ -69,16 +143,11 @@ void VulkanDeferredRenderer::CreateSynchronizationPrimitives()
 	m_LightingCompleteSemaphores.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
 	m_CompositionRenderCompleteSemaphores.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
 
-	VkFenceCreateInfo fenceInfo = {};
-	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	m_GBufferCompleteFence.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
-
 	for (size_t i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		vkCreateSemaphore(VulkanContext::Get().Device(), &semaphoreInfo, nullptr, &m_GBufferCompleteSemaphores[i]);
 		vkCreateSemaphore(VulkanContext::Get().Device(), &semaphoreInfo, nullptr, &m_LightingCompleteSemaphores[i]);
 		vkCreateSemaphore(VulkanContext::Get().Device(), &semaphoreInfo, nullptr, &m_CompositionRenderCompleteSemaphores[i]);
-		VK_CHECK_RESULT(vkCreateFence(VulkanContext::Get().Device(), &fenceInfo, nullptr, &m_GBufferCompleteFence[i]));
 	}
 }
 
@@ -128,6 +197,7 @@ void VulkanDeferredRenderer::CreateGBufferTextures()
 		.Width = m_Renderer->VulkanSwapchain().Width(),
 		.Height = m_Renderer->VulkanSwapchain().Height(),
 		.MemoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.SamplerSpec{.MinFilter = VK_FILTER_NEAREST, .MagFilter = VK_FILTER_NEAREST},
 		.DebugName = "G-Buffer Position",
 	};
 	for (int i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; ++i)
@@ -142,6 +212,7 @@ void VulkanDeferredRenderer::CreateGBufferTextures()
 		.Width = m_Renderer->VulkanSwapchain().Width(),
 		.Height = m_Renderer->VulkanSwapchain().Height(),
 		.MemoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.SamplerSpec{.MinFilter = VK_FILTER_NEAREST, .MagFilter = VK_FILTER_NEAREST},
 		.DebugName = "G-Buffer Normal",
 	};
 	for (int i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; ++i)
@@ -156,6 +227,7 @@ void VulkanDeferredRenderer::CreateGBufferTextures()
 		.Width = m_Renderer->VulkanSwapchain().Width(),
 		.Height = m_Renderer->VulkanSwapchain().Height(),
 		.MemoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.SamplerSpec{.MinFilter = VK_FILTER_LINEAR, .MagFilter = VK_FILTER_LINEAR},
 		.DebugName = "G-Buffer Color",
 	};
 	for (int i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; ++i)
@@ -170,6 +242,7 @@ void VulkanDeferredRenderer::CreateGBufferTextures()
 		.Width = m_Renderer->VulkanSwapchain().Width(),
 		.Height = m_Renderer->VulkanSwapchain().Height(),
 		.MemoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.CreateSampler = false,
 		.DebugName = "G-Buffer Depth",
 	};
 
@@ -235,13 +308,11 @@ void VulkanDeferredRenderer::CreateGBufferRenderPass()
 	 *
 	 * The latest stage that worked on the color attachments of the G-Buffer that must be waited on is either the FRAGMENT_SHADER
 	 * (read by lighting pass) or BOTTOM_OF_THE_PIPE (? is this really necessary though ?) as a catch-all for the first frame
-	 * where nothing worked on the attachments to begin with.  Once the src work is completed, the earliest stage that this pass will
-	 * work on the attachment is in the COLOR_ATTACHMENT_OUTPUT stage where it will write to the attachment.
+	 * where nothing worked on the attachments to begin with.  Once the src work is completed, the earliest stage that this pass
+	 * will work on the attachment is in the COLOR_ATTACHMENT_OUTPUT stage where it will write to the attachment.
 	 */
-	m_GBufferPass->AddDependency(
-		VK_SUBPASS_EXTERNAL, 0,
-		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+	m_GBufferPass->AddDependency(VK_SUBPASS_EXTERNAL, 0, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 		VK_DEPENDENCY_BY_REGION_BIT);
 
 	/*
@@ -252,11 +323,11 @@ void VulkanDeferredRenderer::CreateGBufferRenderPass()
 	 * Once the src work is completed, the earliest stage that this pass will work on the depth/stencil is in the same part of the
 	 * pipeline (early/late fragment tests) where the attachment could either be read from or written to.
 	 */
-	m_GBufferPass->AddDependency(
-		VK_SUBPASS_EXTERNAL, 0,
-		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT  ,
-		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-		VK_DEPENDENCY_BY_REGION_BIT);
+	m_GBufferPass->AddDependency(VK_SUBPASS_EXTERNAL, 0,
+		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_DEPENDENCY_BY_REGION_BIT);
 
 	/*
 	 * G-Buffer Color Attachment Writes -> G-Buffer Color Attachment Reads
@@ -266,10 +337,8 @@ void VulkanDeferredRenderer::CreateGBufferRenderPass()
 	 * Once the src work is completed, the earliest stage that this pass will work on the depth/stencil is in the same part of the
 	 * pipeline (early/late fragment tests) where the attachment could either be read from or written to.
 	 */
-	m_GBufferPass->AddDependency(
-		0, VK_SUBPASS_EXTERNAL,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT , VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+	m_GBufferPass->AddDependency(0, VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
 		VK_DEPENDENCY_BY_REGION_BIT);
 
 	m_GBufferPass->Build();
@@ -279,7 +348,8 @@ void VulkanDeferredRenderer::CreateGBufferPipeline()
 {
 	auto builder = VulkanGraphicsPipelineBuilder("G-Buffer Pipeline")
 					   .SetShaders(m_GBufferVertexShader, m_GBufferFragmentShader)
-					   .SetVertexInputDescription({VulkanModel::Vertex::GetBindingDescriptions(), VulkanModel::Vertex::GetAttributeDescriptions()})
+					   .SetVertexInputDescription(
+						   {VulkanModel::Vertex::GetBindingDescriptions(), VulkanModel::Vertex::GetAttributeDescriptions()})
 					   .SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
 					   .SetPolygonMode(VK_POLYGON_MODE_FILL)
 					   .SetCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE)
@@ -330,6 +400,7 @@ void VulkanDeferredRenderer::CreateLightingTextures()
 		.Width = m_Renderer->VulkanSwapchain().Width(),
 		.Height = m_Renderer->VulkanSwapchain().Height(),
 		.MemoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		.SamplerSpec{.MinFilter = VK_FILTER_LINEAR, .MagFilter = VK_FILTER_LINEAR},
 		.DebugName = "Lighting Color",
 	};
 	for (int i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; i++)
@@ -366,10 +437,8 @@ void VulkanDeferredRenderer::CreateLightingRenderPass()
 	 * where nothing worked on the attachment to begin with.  Once the src work is completed, the earliest stage that this pass will
 	 * work on the attachment is in the COLOR_ATTACHMENT_OUTPUT stage where it will write to the attachment.
 	 */
-	m_LightingPass->AddDependency(
-		VK_SUBPASS_EXTERNAL, 0,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		VK_ACCESS_SHADER_READ_BIT,VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+	m_LightingPass->AddDependency(VK_SUBPASS_EXTERNAL, 0, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 		VK_DEPENDENCY_BY_REGION_BIT);
 
 	/*
@@ -378,10 +447,8 @@ void VulkanDeferredRenderer::CreateLightingRenderPass()
 	 * Wait on the color attachment writes to the lighting image from the previous dependency.
 	 * Once the writes are complete, this pass will prepare the attachment for fragment shader reads.
 	 */
-	m_LightingPass->AddDependency(
-		0, VK_SUBPASS_EXTERNAL,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+	m_LightingPass->AddDependency(0, VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
 		VK_DEPENDENCY_BY_REGION_BIT);
 
 	m_LightingPass->Build();
@@ -449,7 +516,8 @@ void VulkanDeferredRenderer::CreateCompositionRenderPass()
 		Source Stage (srcStageMask):
 			This says: "We need to wait for the src stage to finish working on this attachment (if it was being worked on)."
 		Destination Stage (dstStageMask):
-			This says: "The earliest pipeline stage in our render pass where we will start working on this attachment is the dst stage."
+			This says: "The earliest pipeline stage in our render pass where we will start working on this attachment is the dst
+	   stage."
 	*/
 
 	/*
@@ -459,11 +527,8 @@ void VulkanDeferredRenderer::CreateCompositionRenderPass()
 	 * Once the src work is completed (swapchain image acquired(?)), the earliest stage that this pass will
 	 * work on the attachment is in the COLOR_ATTACHMENT_OUTPUT stage where it will write to the swapchain image.
 	 */
-	m_CompositionPass->AddDependency(
-		VK_SUBPASS_EXTERNAL, 0,
-		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-		VK_DEPENDENCY_BY_REGION_BIT);
+	m_CompositionPass->AddDependency(VK_SUBPASS_EXTERNAL, 0, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_DEPENDENCY_BY_REGION_BIT);
 
 	/*
 	 * Swapchain Color Attachment Writes -> Bottom of the Pipe (presentation)
@@ -473,11 +538,8 @@ void VulkanDeferredRenderer::CreateCompositionRenderPass()
 	 * which to my knowledge, is conservatively done by using VK_PIPELINE_STAGE_BOTTOM_OF_PIPE as the dst stage
 	 * with 0 as the dst access mask.
 	 */
-	m_CompositionPass->AddDependency(
-		0, VK_SUBPASS_EXTERNAL,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
-		VK_DEPENDENCY_BY_REGION_BIT);
+	m_CompositionPass->AddDependency(0, VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0, VK_DEPENDENCY_BY_REGION_BIT);
 
 	m_CompositionPass->Build();
 }
@@ -558,9 +620,7 @@ void VulkanDeferredRenderer::SubmitRenderPasses(uint32_t frameIndex)
 	VkSubmitInfo gBufferSubmitInfo{};
 	gBufferSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	std::vector<VkSemaphore> gBufferWaitSemaphores = {m_Renderer->ImageAvailableSemaphore(frameIndex)};
-	VkPipelineStageFlags gBufferWaitStages[] = {
-		VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};	// <- We're saying "don't start writing to color attachments until the previous
-												// operation is complete
+	VkPipelineStageFlags gBufferWaitStages[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
 	std::vector<VkSemaphore> gBufferSignalSemaphores = {m_GBufferCompleteSemaphores[frameIndex]};
 
 	gBufferSubmitInfo.waitSemaphoreCount = static_cast<uint32_t>(gBufferWaitSemaphores.size());
@@ -579,9 +639,7 @@ void VulkanDeferredRenderer::SubmitRenderPasses(uint32_t frameIndex)
 	VkSubmitInfo lightingSubmitInfo{};
 	lightingSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	std::vector<VkSemaphore> lightingWaitSemaphores = {m_GBufferCompleteSemaphores[frameIndex]};
-	VkPipelineStageFlags lightingWaitStages[] = {
-		VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};	// <- We're saying "don't start writing to color attachments until the previous
-												// operation is complete
+	VkPipelineStageFlags lightingWaitStages[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
 	std::vector<VkSemaphore> lightingSignalSemaphores = {m_LightingCompleteSemaphores[frameIndex]};
 
 	lightingSubmitInfo.waitSemaphoreCount = static_cast<uint32_t>(lightingWaitSemaphores.size());
@@ -627,7 +685,8 @@ void VulkanDeferredRenderer::RecordGBufferCommandBuffer(FrameInfo& frameInfo)
 	m_GBufferPass->BeginPass(gBufferCmd, gBufferRenderPassInfo, attachmentExtent);
 	for (auto& [id, gameObject] : frameInfo.ActiveScene.GameObjects)
 	{
-		gameObject.Render(gBufferCmd, frameIndex, frameInfo.GlobalUbo->DescriptorInfo());
+		auto globalUbo = frameInfo.GlobalUbo.lock();
+		gameObject.Render(gBufferCmd, frameIndex, globalUbo->DescriptorInfo());
 	}
 	m_GBufferPass->EndPass(gBufferCmd);
 
@@ -661,8 +720,9 @@ void VulkanDeferredRenderer::RecordLightingPassCommandBuffer(FrameInfo& frameInf
 		m_LightingPipeline->Bind(lightingCmd);
 		m_LightingPass->BeginPass(lightingCmd, lightingRenderPassInfo, attachmentExtent);
 		{
+			auto globalUbo = frameInfo.GlobalUbo.lock();
 			m_LightingMaterial->UpdateDescriptorSets(frameIndex,
-				{{0, {{.binding = 0, .type = DescriptorUpdate::Type::Buffer, .bufferInfo = frameInfo.GlobalUbo->DescriptorInfo()}}},
+				{{0, {{.binding = 0, .type = DescriptorUpdate::Type::Buffer, .bufferInfo = globalUbo->DescriptorInfo()}}},
 					{1,
 						{{// Position
 							 .binding = 0,
@@ -676,7 +736,9 @@ void VulkanDeferredRenderer::RecordLightingPassCommandBuffer(FrameInfo& frameInf
 								.binding = 2,
 								.type = DescriptorUpdate::Type::Image,
 								.imageInfo = m_GBufferTextures[frameIndex][2]->GetBaseViewDescriptorInfo()}}}});
+			m_LightingMaterial->SetPushConstant<int>("DebugDisplayIndex", 0);
 
+			m_LightingMaterial->BindPushConstants(lightingCmd);
 			m_LightingMaterial->BindDescriptors(frameIndex, lightingCmd, VK_PIPELINE_BIND_POINT_GRAPHICS);
 			vkCmdDraw(lightingCmd, 3, 1, 0, 0);
 		}

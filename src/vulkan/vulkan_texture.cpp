@@ -218,7 +218,10 @@ void VulkanTexture2D::CreateTextureImage()
     imageSpec.Height = m_Specification.Height;
     imageSpec.Usage = ImageUsage::Texture;
     imageSpec.Mips = mipLevels;
+	imageSpec.SamplerSpec = m_Specification.SamplerSpec;
     imageSpec.DebugName = m_Specification.DebugName;
+	imageSpec.UsedInTransferOps = m_Specification.UsedInTransferOps;
+	imageSpec.Properties = m_Specification.MemoryProperties;
 
     m_Image = std::make_unique<VulkanImage2D>(imageSpec);
     m_Image->CopyFromBufferAndGenerateMipmaps(stagingBuffer.GetBuffer(), imageSize, mipLevels);
@@ -235,6 +238,7 @@ void VulkanTexture2D::CreateAttachmentImage()
     imageSpec.DebugName = m_Specification.DebugName;
     imageSpec.Properties = m_Specification.MemoryProperties;
     imageSpec.UsedInTransferOps = m_Specification.UsedInTransferOps;
+	imageSpec.SamplerSpec = m_Specification.SamplerSpec;
 
     m_Image = std::make_unique<VulkanImage2D>(imageSpec);
 }
@@ -247,14 +251,14 @@ void VulkanTexture2D::CreateEmptyTextureImage()
     imageSpec.Height = m_Specification.Height;
     imageSpec.Usage = ImageUsage::Texture;
     imageSpec.Mips = m_Specification.GenerateMips ? ImageUtils::CalculateMipCount(m_Specification.Width, m_Specification.Height) : 1;
-    imageSpec.DebugName = m_Specification.DebugName;
+	imageSpec.SamplerSpec = m_Specification.SamplerSpec;
+	imageSpec.DebugName = m_Specification.DebugName;
+	imageSpec.UsedInTransferOps = m_Specification.UsedInTransferOps;
+	imageSpec.Properties = m_Specification.MemoryProperties;
 
     m_Image = std::make_unique<VulkanImage2D>(imageSpec);
 
-    // Transition the image to a shader read optimal layout
-    VkCommandBuffer commandBuffer = VulkanContext::Get().BeginSingleTimeCommands();
-    m_Image->TransitionLayout(commandBuffer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    VulkanContext::Get().EndSingleTimeCommand(commandBuffer);
+    TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void VulkanTexture2D::UpdateDescriptorInfo()

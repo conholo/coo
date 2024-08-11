@@ -14,7 +14,7 @@ class VulkanDeferredRenderer : public IRenderer
 {
 public:
     explicit VulkanDeferredRenderer(VulkanRenderer* renderer);
-    ~VulkanDeferredRenderer() override;
+    ~VulkanDeferredRenderer() override = default;
 
     void Initialize() override;
     void Shutdown() override;
@@ -66,7 +66,6 @@ private:
 	std::vector<VkSemaphore> m_GBufferCompleteSemaphores;
 	std::vector<VkSemaphore> m_LightingCompleteSemaphores;
 	std::vector<VkSemaphore> m_CompositionRenderCompleteSemaphores;
-	std::vector<VkFence> m_GBufferCompleteFence;
 
     // These framebuffers will be resized on creation or resize.
     std::vector<std::unique_ptr<VulkanFramebuffer>> m_GBufferFramebuffers;

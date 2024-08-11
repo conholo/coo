@@ -38,8 +38,27 @@ public:
     void UpdateDescriptor(uint32_t frameIndex, uint32_t set, const DescriptorUpdate& update);
     void UpdateDescriptorSets(uint32_t frameIndex, const std::vector<std::pair<uint32_t, std::vector<DescriptorUpdate>>>& updates);
 
-    template<typename T>
-    void SetPushConstant(const std::string& name, const T& value);
+	template<typename T>
+	void SetPushConstant(const std::string& name, const T& value)
+	{
+		const auto& pushConstantRanges = m_Layout->GetPushConstantRanges();
+		auto it = std::find_if(pushConstantRanges.begin(), pushConstantRanges.end(), [&name](const VulkanMaterialLayout::PushConstantRange& range) { return range.name == name; });
+
+		if (it == pushConstantRanges.end())
+		{
+			throw std::runtime_error("Push constant not found: " + name);
+		}
+
+		if (sizeof(T) > it->size)
+		{
+			throw std::runtime_error("Push constant data too large for: " + name);
+		}
+
+		std::vector<uint8_t> data(sizeof(T));
+		memcpy(data.data(), &value, sizeof(T));
+		m_PushConstantData[name] = std::move(data);
+	}
+
     void BindPushConstants(VkCommandBuffer commandBuffer);
 
     VkPipelineLayout GetPipelineLayout() const { return m_Layout->GetPipelineLayout(); }

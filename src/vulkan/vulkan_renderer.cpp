@@ -19,9 +19,12 @@ VulkanRenderer::VulkanRenderer(Window& window) : m_WindowRef(window)
 	m_Renderer = std::make_unique<VulkanDeferredRenderer>(this);
 }
 
-VulkanRenderer::~VulkanRenderer()
+void VulkanRenderer::Shutdown()
 {
-	Shutdown();
+	m_SwapchainRenderer->Shutdown();
+	m_SwapchainRenderer = nullptr;
+	m_GlobalUboBuffers.clear();
+	m_Renderer->Shutdown();
 }
 
 void VulkanRenderer::Initialize()
@@ -29,7 +32,10 @@ void VulkanRenderer::Initialize()
 	for (auto& uboBuffer : m_GlobalUboBuffers)
 	{
 		uboBuffer = std::make_shared<VulkanBuffer>(
-			sizeof(GlobalUbo), 1, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+			sizeof(GlobalUbo),
+			1,
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 		uboBuffer->Map();
 	}
 
@@ -53,9 +59,12 @@ void VulkanRenderer::Render(FrameInfo& frameInfo)
 		.InvProjection = frameInfo.Cam.GetInvProjection(),
 		.CameraPosition = glm::vec4(frameInfo.Cam.GetPosition(), 1.0)};
 
-	frameInfo.GlobalUbo = m_GlobalUboBuffers[m_CurrentFrameIndex];
-	frameInfo.GlobalUbo->WriteToBuffer(&ubo);
-	frameInfo.GlobalUbo->Flush();
+	std::weak_ptr<VulkanBuffer> uboBuffer = m_GlobalUboBuffers[m_CurrentFrameIndex];
+	auto sharedBuffer = uboBuffer.lock();
+
+	frameInfo.GlobalUbo = sharedBuffer;
+	sharedBuffer->WriteToBuffer(&ubo);
+	sharedBuffer->Flush();
 	frameInfo.DrawCommandBuffer = cmd;
 
 	m_Renderer->Render(frameInfo);
@@ -72,8 +81,4 @@ void VulkanRenderer::PrepareGameObjectForRendering(GameObject& gameObjectRef)
 void VulkanRenderer::OnSwapchainRecreate(uint32_t width, uint32_t height)
 {
 	m_Renderer->Resize(width, height);
-}
-
-void VulkanRenderer::Shutdown()
-{
 }

@@ -25,4 +25,6 @@ private:
     std::unique_ptr<VulkanRenderer> m_Renderer;
     std::unique_ptr<Scene> m_Scene;
     Camera m_Camera;
+
+	bool m_ApplicationIsRunning = true;
 };
