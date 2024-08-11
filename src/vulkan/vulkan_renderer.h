@@ -11,7 +11,7 @@ class VulkanRenderer
 {
 public:
     explicit VulkanRenderer(Window& windowRef);
-    ~VulkanRenderer();
+    ~VulkanRenderer() = default;
 
     void Initialize();
 	void Render(FrameInfo& frameInfo);

@@ -16,7 +16,7 @@ public:
         uint32_t size;
     };
 
-    VulkanMaterialLayout(std::shared_ptr<VulkanShader> vertexShader, std::shared_ptr<VulkanShader> fragmentShader);
+    VulkanMaterialLayout(const std::shared_ptr<VulkanShader>& vertexShader, const std::shared_ptr<VulkanShader>& fragmentShader);
     ~VulkanMaterialLayout();
 
     VulkanMaterialLayout(const VulkanMaterialLayout&) = delete;
@@ -38,5 +38,5 @@ private:
     ShaderDescriptorInfo m_ShaderDescriptorInfo;
     std::vector<std::shared_ptr<VulkanDescriptorSetLayout>> m_DescriptorSetLayouts;
     std::vector<PushConstantRange> m_PushConstantRanges;
-    VkPipelineLayout m_PipelineLayout;
+    VkPipelineLayout m_PipelineLayout{};
 };

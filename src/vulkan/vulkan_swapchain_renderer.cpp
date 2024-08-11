@@ -11,9 +11,13 @@ VulkanSwapchainRenderer::VulkanSwapchainRenderer(Window& windowRef) : m_WindowRe
 	RecreateSwapchain();
 }
 
-VulkanSwapchainRenderer::~VulkanSwapchainRenderer()
+void VulkanSwapchainRenderer::Shutdown()
 {
 	FreeCommandBuffers();
+	if(m_Swapchain != nullptr)
+	{
+		m_Swapchain->Destroy();
+	}
 }
 
 void VulkanSwapchainRenderer::RecreateSwapchain()

@@ -10,19 +10,6 @@ VulkanDeferredRenderer::VulkanDeferredRenderer(VulkanRenderer* renderer) : m_Ren
 {
 }
 
-VulkanDeferredRenderer::~VulkanDeferredRenderer()
-{
-	vkFreeCommandBuffers(VulkanContext::Get().Device(), VulkanContext::Get().GraphicsCommandPool(), m_GBufferCommandBuffers.size(),
-		m_GBufferCommandBuffers.data());
-	vkFreeCommandBuffers(VulkanContext::Get().Device(), VulkanContext::Get().GraphicsCommandPool(), m_LightingCommandBuffers.size(),
-		m_LightingCommandBuffers.data());
-
-	for (auto semaphore : m_GBufferCompleteSemaphores)
-		vkDestroySemaphore(VulkanContext::Get().Device(), semaphore, nullptr);
-	for (auto semaphore : m_LightingCompleteSemaphores)
-		vkDestroySemaphore(VulkanContext::Get().Device(), semaphore, nullptr);
-}
-
 void VulkanDeferredRenderer::Initialize()
 {
 	CreateCommandBuffers();
@@ -38,6 +25,93 @@ void VulkanDeferredRenderer::Initialize()
 
 void VulkanDeferredRenderer::Shutdown()
 {
+	auto& contextRef = VulkanContext::Get();
+	auto device = contextRef.Device();
+	vkFreeCommandBuffers(
+		device,
+		contextRef.GraphicsCommandPool(),
+		static_cast<uint32_t>(m_GBufferCommandBuffers.size()),
+		m_GBufferCommandBuffers.data());
+	m_GBufferCommandBuffers.clear();
+
+	vkFreeCommandBuffers(
+		device,
+		contextRef.GraphicsCommandPool(),
+		static_cast<uint32_t>(m_LightingCommandBuffers.size()),
+		m_LightingCommandBuffers.data());
+	m_LightingCommandBuffers.clear();
+
+	for (size_t i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		vkDestroySemaphore(device, m_GBufferCompleteSemaphores[i], nullptr);
+		m_GBufferCompleteSemaphores[i] = VK_NULL_HANDLE;
+		vkDestroySemaphore(device, m_LightingCompleteSemaphores[i], nullptr);
+		m_LightingCompleteSemaphores[i] = VK_NULL_HANDLE;
+		vkDestroySemaphore(device, m_CompositionRenderCompleteSemaphores[i], nullptr);
+		m_CompositionRenderCompleteSemaphores[i] = VK_NULL_HANDLE;
+	}
+	m_GBufferCompleteSemaphores.clear();
+	m_LightingCompleteSemaphores.clear();
+	m_CompositionRenderCompleteSemaphores.clear();
+
+	// Textures/Attachments
+	m_GBufferTextures.clear();
+	m_LightingTextures.clear();
+
+	// Render Passes
+	m_GBufferPass.reset();
+	m_GBufferPass = nullptr;
+	m_LightingPass.reset();
+	m_LightingPass = nullptr;
+	m_CompositionPass.reset();
+	m_CompositionPass = nullptr;
+
+	// Pipelines
+	m_GBufferPipeline.reset();
+	m_GBufferPipeline = nullptr;
+
+	m_LightingPipeline.reset();
+	m_LightingPipeline = nullptr;
+
+	m_CompositionPipeline.reset();
+	m_CompositionPipeline = nullptr;
+
+	// Framebuffers
+	m_GBufferFramebuffers.clear();
+	m_LightingFramebuffers.clear();
+	m_CompositionFramebuffers.clear();
+
+	// Materials/Layouts
+	m_GBufferMaterialLayout.reset();
+	m_GBufferMaterialLayout = nullptr;
+	m_GBufferBaseMaterial.reset();
+	m_GBufferBaseMaterial = nullptr;
+
+	m_LightingMaterialLayout.reset();
+	m_LightingMaterialLayout = nullptr;
+	m_LightingMaterial.reset();
+	m_LightingMaterial = nullptr;
+
+	m_CompositionMaterialLayout.reset();
+	m_CompositionMaterialLayout = nullptr;
+	m_CompositionMaterial.reset();
+	m_CompositionMaterial = nullptr;
+
+	// Shaders
+	m_FullScreenQuadVertexShader.reset();
+	m_FullScreenQuadVertexShader = nullptr;
+
+	m_GBufferVertexShader.reset();
+	m_GBufferVertexShader = nullptr;
+
+	m_GBufferFragmentShader.reset();
+	m_GBufferFragmentShader = nullptr;
+
+	m_LightingFragmentShader.reset();
+	m_LightingFragmentShader = nullptr;
+
+	m_CompositionFragmentShader.reset();
+	m_CompositionFragmentShader = nullptr;
 }
 
 void VulkanDeferredRenderer::RegisterGameObject(GameObject& gameObjectRef)
@@ -69,16 +143,11 @@ void VulkanDeferredRenderer::CreateSynchronizationPrimitives()
 	m_LightingCompleteSemaphores.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
 	m_CompositionRenderCompleteSemaphores.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
 
-	VkFenceCreateInfo fenceInfo = {};
-	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	m_GBufferCompleteFence.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
-
 	for (size_t i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		vkCreateSemaphore(VulkanContext::Get().Device(), &semaphoreInfo, nullptr, &m_GBufferCompleteSemaphores[i]);
 		vkCreateSemaphore(VulkanContext::Get().Device(), &semaphoreInfo, nullptr, &m_LightingCompleteSemaphores[i]);
 		vkCreateSemaphore(VulkanContext::Get().Device(), &semaphoreInfo, nullptr, &m_CompositionRenderCompleteSemaphores[i]);
-		VK_CHECK_RESULT(vkCreateFence(VulkanContext::Get().Device(), &fenceInfo, nullptr, &m_GBufferCompleteFence[i]));
 	}
 }
 
@@ -616,7 +685,8 @@ void VulkanDeferredRenderer::RecordGBufferCommandBuffer(FrameInfo& frameInfo)
 	m_GBufferPass->BeginPass(gBufferCmd, gBufferRenderPassInfo, attachmentExtent);
 	for (auto& [id, gameObject] : frameInfo.ActiveScene.GameObjects)
 	{
-		gameObject.Render(gBufferCmd, frameIndex, frameInfo.GlobalUbo->DescriptorInfo());
+		auto globalUbo = frameInfo.GlobalUbo.lock();
+		gameObject.Render(gBufferCmd, frameIndex, globalUbo->DescriptorInfo());
 	}
 	m_GBufferPass->EndPass(gBufferCmd);
 
@@ -650,8 +720,9 @@ void VulkanDeferredRenderer::RecordLightingPassCommandBuffer(FrameInfo& frameInf
 		m_LightingPipeline->Bind(lightingCmd);
 		m_LightingPass->BeginPass(lightingCmd, lightingRenderPassInfo, attachmentExtent);
 		{
+			auto globalUbo = frameInfo.GlobalUbo.lock();
 			m_LightingMaterial->UpdateDescriptorSets(frameIndex,
-				{{0, {{.binding = 0, .type = DescriptorUpdate::Type::Buffer, .bufferInfo = frameInfo.GlobalUbo->DescriptorInfo()}}},
+				{{0, {{.binding = 0, .type = DescriptorUpdate::Type::Buffer, .bufferInfo = globalUbo->DescriptorInfo()}}},
 					{1,
 						{{// Position
 							 .binding = 0,

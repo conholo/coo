@@ -100,7 +100,6 @@ void VulkanContext::SelectPhysicalDevice()
     std::cout << "Physical device: " << m_PhysicalDevice.PhysicalDeviceProperties.deviceName << std::endl;
 }
 
-
 void VulkanContext::CreateGraphicsCommandPool()
 {
     QueueFamilyIndices queueFamilyIndices = m_PhysicalDevice.ReadQueueFamilyIndices();

@@ -1,7 +1,7 @@
 #include "vulkan_material_layout.h"
 #include "vulkan_context.h"
 
-VulkanMaterialLayout::VulkanMaterialLayout(std::shared_ptr<VulkanShader> vertexShader, std::shared_ptr<VulkanShader> fragmentShader)
+VulkanMaterialLayout::VulkanMaterialLayout(const std::shared_ptr<VulkanShader>& vertexShader, const std::shared_ptr<VulkanShader>& fragmentShader)
         : m_VertexShader(vertexShader), m_FragmentShader(fragmentShader)
 {
     m_ShaderDescriptorInfo.AddShaderReflection(m_VertexShader->GetReflection(), m_VertexShader->GetShaderStage());
@@ -18,6 +18,20 @@ VulkanMaterialLayout::~VulkanMaterialLayout()
     {
         vkDestroyPipelineLayout(VulkanContext::Get().Device(), m_PipelineLayout, nullptr);
     }
+
+	if(m_VertexShader)
+	{
+		m_VertexShader.reset();
+		m_VertexShader = nullptr;
+	}
+
+	if(m_FragmentShader)
+	{
+		m_FragmentShader.reset();
+		m_FragmentShader = nullptr;
+	}
+
+	m_DescriptorSetLayouts.clear();
 }
 
 void VulkanMaterialLayout::CreateDescriptorSetLayouts()

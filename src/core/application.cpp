@@ -57,13 +57,14 @@ Application::Application()
 Application::~Application()
 {
     m_Renderer->Shutdown();
+	m_Scene = nullptr;
     VulkanContext::Shutdown();
 }
 
 void Application::Run()
 {
     auto currentTime = std::chrono::high_resolution_clock::now();
-    while (!m_Window->ShouldClose())
+    while (m_ApplicationIsRunning)
     {
         glfwPollEvents();
 
@@ -98,6 +99,7 @@ void Application::OnEvent(Event& event)
 
 bool Application::OnWindowClose(WindowClosedEvent& event)
 {
+	m_ApplicationIsRunning = false;
     return true;
 }
 

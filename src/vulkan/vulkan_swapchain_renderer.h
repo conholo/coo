@@ -14,7 +14,8 @@ public:
     using OnRecreateSwapchainCallbackFn = std::function<void(uint32_t, uint32_t)>;
 
     explicit VulkanSwapchainRenderer(Window& windowRef);
-    ~VulkanSwapchainRenderer();
+    ~VulkanSwapchainRenderer() = default;
+	void Shutdown();
 
     VulkanSwapchainRenderer(const VulkanSwapchainRenderer &) = delete;
     VulkanSwapchainRenderer &operator=(const VulkanSwapchainRenderer &) = delete;

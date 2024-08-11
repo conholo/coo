@@ -207,7 +207,7 @@ void VulkanImage2D::CreateSampler()
 		.SetFilter(m_Specification.SamplerSpec.MinFilter, m_Specification.SamplerSpec.MagFilter)
 		.SetMipmapMode(m_Specification.SamplerSpec.MipMapMode)
 		.SetAddressMode(m_Specification.SamplerSpec.AddressModeU, m_Specification.SamplerSpec.AddressModeV, m_Specification.SamplerSpec.AddressModeW);
-	
+
 	m_Sampler = builder.Build();
 }
 
@@ -498,6 +498,7 @@ VulkanImageView::~VulkanImageView()
         vkDestroyImageView(VulkanContext::Get().Device(), m_ImageView, nullptr);
         m_ImageView = VK_NULL_HANDLE;
     }
+	m_Image = nullptr;
 }
 
 void VulkanImageView::UpdateDescriptorInfo(VkImageLayout layout, VkSampler sampler)

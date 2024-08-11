@@ -19,7 +19,7 @@ struct FrameInfo
     size_t FrameIndex;
     float DeltaTime;
     Scene& ActiveScene;
-    std::shared_ptr<VulkanBuffer> GlobalUbo;
+    std::weak_ptr<VulkanBuffer> GlobalUbo;
     VkCommandBuffer DrawCommandBuffer;
 	VkSemaphore SignalForPresentation;
 	VkSemaphore WaitForGraphicsSubmit;
