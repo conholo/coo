@@ -1,4 +1,3 @@
-#include <chrono>
 #include "application.h"
 #include "engine_utils.h"
 #include "core/event/mouse_event.h"
