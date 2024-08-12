@@ -3,7 +3,7 @@
 #include "vulkan_buffer.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
+#include "../../external/tiny_obj/tiny_obj_loader.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>

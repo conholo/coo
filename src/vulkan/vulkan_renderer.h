@@ -1,11 +1,12 @@
 #pragma once
 
 #include "vulkan_swapchain_renderer.h"
-#include "core/game_object.h"
 #include "irenderer.h"
 #include "core/frame_info.h"
 
 #include <memory>
+
+class GameObject;
 
 class VulkanRenderer
 {

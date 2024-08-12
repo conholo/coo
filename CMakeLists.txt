@@ -1,83 +1,84 @@
 cmake_minimum_required(VERSION 3.11.0)
-set(NAME coo)
-project(${NAME})
+set(PROJECT_NAME coo)
+project(${PROJECT_NAME})
+
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Common setup code here
-message(STATUS "Using ${CMAKE_GENERATOR}")
+# Enable ccache
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
+endif()
 
-# TinyOBJ setup
-if (NOT TINYOBJ_PATH)
-    set(TINYOBJ_PATH ${CMAKE_SOURCE_DIR}/third_party/)
-    message(STATUS "TINYOBJ_PATH not specified in .env.cmake, using: ${TINYOBJ_PATH}")
-endif ()
+# Enable parallel compilation
+include(ProcessorCount)
+ProcessorCount(N)
+if(NOT N EQUAL 0)
+    set(CMAKE_BUILD_PARALLEL_LEVEL ${N})
+endif()
+
+# Use response files for Ninja
+if(CMAKE_GENERATOR MATCHES "Ninja")
+    set(CMAKE_NINJA_FORCE_RESPONSE_FILE 1 CACHE BOOL "Force Ninja to use response files.")
+endif()
+
+# Debug build settings
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_options(-O0 -g)
+endif()
+
+# Function to add external dependencies
+function(add_external_dependency NAME)
+    add_subdirectory(external/${NAME})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${NAME})
+    target_include_directories(${PROJECT_NAME} PRIVATE external/${NAME}/include)
+endfunction()
 
 # Gather source files
 file(GLOB_RECURSE SOURCES ${PROJECT_SOURCE_DIR}/src/*.cpp)
-add_executable(${PROJECT_NAME} ${SOURCES}
-        src/vulkan/vulkan_material_layout.cpp
-        src/core/scene.cpp)
+add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+
+# Set working directory for debugging
 set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
 
 # Include platform-specific CMake file
-if (WIN32)
-    include(CMakeLists_Windows.txt)
-elseif (UNIX AND APPLE)
-    include(CMakeLists_Mac.txt)
-else ()
+if(WIN32)
+    include(cmake/Windows.cmake)
+elseif(UNIX AND APPLE)
+    include(cmake/Mac.cmake)
+elseif(UNIX AND NOT APPLE)
+    include(cmake/Linux.cmake)  # You may need to create this file for Linux support
+else()
     message(FATAL_ERROR "Unsupported platform")
-endif ()
+endif()
 
-# Common include directories
-target_include_directories(${PROJECT_NAME} PUBLIC
+# Common include directories (moved here to avoid duplication)
+target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_SOURCE_DIR}/src
-        ${PROJECT_SOURCE_DIR}/include
-        ${TINYOBJ_PATH}
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/external/tiny_obj
+        ${CMAKE_SOURCE_DIR}/external/stb
 )
+
+# spirv and shaderc
+include(cmake/SpirvAndShaderc.cmake)
+
+# Add external dependencies
+add_external_dependency(spdlog)
+add_external_dependency(imgui)
 
 # Shader compilation
-find_program(GLSL_VALIDATOR glslangValidator HINTS
-        ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}
-        /usr/bin
-        /usr/local/bin
-        ${VULKAN_SDK_PATH}/Bin
-        ${VULKAN_SDK_PATH}/Bin32
-        $ENV{VULKAN_SDK}/Bin/
-        $ENV{VULKAN_SDK}/Bin32/
-)
-
-# Get all .vert and .frag files in shaders directory
-file(GLOB_RECURSE GLSL_SOURCE_FILES
-        "${PROJECT_SOURCE_DIR}/assets/shaders/*.frag"
-        "${PROJECT_SOURCE_DIR}/assets/shaders/*.vert"
-        "${PROJECT_SOURCE_DIR}/assets/shaders/*.comp"
-)
-
-foreach (GLSL ${GLSL_SOURCE_FILES})
-    get_filename_component(FILE_NAME ${GLSL} NAME)
-    set(SPIRV "${PROJECT_SOURCE_DIR}/assets/shaders/${FILE_NAME}.spv")
-    add_custom_command(
-            OUTPUT ${SPIRV}
-            COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV} -g
-            DEPENDS ${GLSL})
-    list(APPEND SPIRV_BINARY_FILES ${SPIRV})
-endforeach (GLSL)
-
-add_custom_target(
-        Shaders
-        DEPENDS ${SPIRV_BINARY_FILES}
-)
-
-# Make sure shaders are built before the main target
-add_dependencies(${PROJECT_NAME} Shaders)
+include(cmake/ShaderCompilation.cmake)
 
 # Set the working directory for Visual Studio
-if (MSVC)
+if(MSVC)
     set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
-endif ()
+endif()
 
 # Print status messages
 message(STATUS "Project '${PROJECT_NAME}' configured.")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "Using ${CMAKE_GENERATOR}")

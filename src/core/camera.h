@@ -39,8 +39,8 @@ struct DragState
 class Camera
 {
 public:
-    void SetOrthographicProjection(float left, float right, float top, float bottom, float near, float far);
-    void SetPerspectiveProjection(float fovy, float aspect, float near, float far);
+    void SetOrthographicProjection(float left, float right, float top, float bottom, float nearPlane, float farPlane);
+    void SetPerspectiveProjection(float fovy, float aspect, float nearPlane, float farPlane);
     void UpdateView();
 
     const glm::mat4& GetProjection() const { return m_ProjectionMatrix; }

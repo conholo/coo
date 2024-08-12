@@ -4,8 +4,7 @@
 #include "vulkan_deferred_renderer.h"
 #include "vulkan_simple_renderer.h"
 #include "vulkan_utils.h"
-
-#include <memory>
+#include "core/game_object.h"
 
 VulkanRenderer::VulkanRenderer(Window& window) : m_WindowRef(window)
 {
