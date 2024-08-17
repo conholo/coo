@@ -53,12 +53,6 @@ void VulkanRenderer::Initialize()
 	auto swapchainPass = std::unique_ptr<SwapchainPass>();
 
 	RenderGraph graph;
-
-	GBufferPass::Dependencies gBufferDependencies
-		{
-			.ImageAvailableSemaphores = m_SwapchainRenderer->GetImageAvailableSemaphore()
-		};
-
 	auto gBufferPass = std::make_unique<GBufferPass>();
 
 	/*

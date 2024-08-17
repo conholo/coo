@@ -114,37 +114,12 @@ public:
 		}
 	}
 
-	void Cleanup()
+	void Execute(FrameInfo& frameInfo)
 	{
 		for (auto& pass : m_Passes)
 		{
-			pass->Cleanup(*this);
-		}
-	}
-
-	void Resize(uint32_t width, uint32_t height)
-	{
-		for (auto& pass : m_Passes)
-		{
-			pass->Resize(*this, width, height);
-		}
-	}
-
-	void Execute(uint32_t frameIndex)
-	{
-		for (auto& pass : m_Passes)
-		{
-			pass->PrepareResources(*this, frameIndex);
-			pass->UpdateParameters(*this, frameIndex);
-
-			VkCommandBuffer cmd = BeginCommandBuffer();
-			pass->BeginProfiling(cmd);
-			pass->RecordCommandBuffer(*this, cmd, frameIndex);
-			pass->EndProfiling(cmd);
-			EndCommandBuffer(cmd);
-
-			SubmitCommandBuffer(
-				cmd, pass->GetWaitSemaphores(frameIndex), pass->GetWaitStages(frameIndex), pass->GetSignalSemaphores(frameIndex));
+			pass->Record(frameInfo, *this);
+			pass->Submit(frameInfo, *this);
 		}
 	}
 

@@ -10,11 +10,8 @@ class RenderPass
 {
 public:
 	virtual void CreateResources(RenderGraph& graph) = 0;
-	virtual void Resize(RenderGraph& graph, uint32_t width, uint32_t height) = 0;
-	virtual void RecordCommandBuffer(RenderGraph& graph, VkCommandBuffer cmd, uint32_t frameIndex) = 0;
-	virtual void Cleanup(RenderGraph& graph) = 0;
-	virtual void SetDependencies(RenderGraph& graph) = 0;
-
+	virtual void Record(const FrameInfo& frameInfo, RenderGraph& graph) = 0;
+	virtual void Submit(const FrameInfo& frameInfo, RenderGraph& graph) = 0;
 private:
 	friend class RenderGraph;
 };

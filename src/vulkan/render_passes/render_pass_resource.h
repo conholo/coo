@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_semaphore.h>
 
 #include <memory>
 #include <string>
@@ -25,6 +26,7 @@ private:
 	size_t m_Id;
 
 public:
+	ResourceHandle() : m_Id(std::numeric_limits<size_t>::max()) {}
 	explicit ResourceHandle(size_t id) : m_Id(id) {}
 
 	ResourceHandle(const ResourceHandle&) = default;
@@ -154,18 +156,18 @@ private:
 class SemaphoreResource : public RenderPassResource
 {
 public:
-	SemaphoreResource(const std::string& name, VkSemaphore semaphore)
-		: RenderPassResource(name, Type::Texture), m_Semaphore(semaphore)
+	SemaphoreResource(const std::string& name, std::shared_ptr<VulkanSemaphore> semaphore)
+		: RenderPassResource(name, Type::Texture), m_Semaphore(std::move(semaphore))
 	{
 	}
 
-	VkSemaphore Get() const
+	std::shared_ptr<VulkanSemaphore> Get() const
 	{
 		return m_Semaphore;
 	}
 
 private:
-	VkSemaphore m_Semaphore;
+	std::shared_ptr<VulkanSemaphore> m_Semaphore;
 };
 
 class CommandBufferResource : public RenderPassResource

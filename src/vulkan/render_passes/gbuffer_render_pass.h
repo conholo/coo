@@ -6,23 +6,38 @@
 class GBufferPass : public RenderPass
 {
 public:
-
-	GBufferPass();
 	void CreateResources(RenderGraph& graph) override;
-	void SetDependencies(RenderGraph& graph) override;
-	void Resize(RenderGraph& graph, uint32_t width, uint32_t height) override;
-	void RecordCommandBuffer(RenderGraph& graph, VkCommandBuffer cmd, uint32_t frameIndex) override;
-	void Cleanup(RenderGraph& graph) override;
+	void Record(const FrameInfo& frameInfo, RenderGraph& graph) override;
+	void Submit(const FrameInfo& frameInfo, RenderGraph& graph) override;
 
 private:
-	void CreateCommandBuffers();
-	void CreateSynchronizationPrimitives();
-	void CreateTextures();
-	void CreateGraphicsPipeline();
-	void CreateRenderPass();
-	void CreateFramebuffers();
+	void CreateCommandBuffers(RenderGraph& graph);
+	void CreateSynchronizationPrimitives(RenderGraph& graph);
+	void CreateTextures(RenderGraph& graph);
+	void CreateRenderPass(RenderGraph& graph);
+	void CreateShaders(RenderGraph& graph);
+	void CreateMaterialLayout(RenderGraph& graph);
+	void CreateMaterial(RenderGraph& graph);
+
+	void CreateGraphicsPipeline(RenderGraph& graph);
+	void CreateFramebuffers(RenderGraph& graph);
 
 private:
-	Dependencies m_Dependencies;
-	ResourceHandles m_Handles;
+
+	std::vector<ResourceHandle<CommandBufferResource>> m_CommandBufferHandles;
+	std::vector<ResourceHandle<SemaphoreResource>> m_RenderCompleteSemaphoreHandles;
+
+	std::vector<ResourceHandle<TextureResource>> m_PositionTextureHandles;
+	std::vector<ResourceHandle<TextureResource>> m_NormalTextureHandles;
+	std::vector<ResourceHandle<TextureResource>> m_AlbedoTextureHandles;
+	std::vector<ResourceHandle<TextureResource>> m_DepthTextureHandles;
+
+	std::vector<ResourceHandle<FramebufferResource>> m_FramebufferHandles;
+
+	ResourceHandle<GraphicsPipelineObjectResource> m_PipelineHandle{};
+	ResourceHandle<RenderPassObjectResource> m_RenderPassHandle;
+	ResourceHandle<MaterialLayoutResource> m_MaterialLayoutHandle;
+	ResourceHandle<MaterialResource> m_MaterialHandle;
+	ResourceHandle<ShaderResource> m_VertexHandle;
+	ResourceHandle<ShaderResource> m_FragmentHandle;
 };
