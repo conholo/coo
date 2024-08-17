@@ -38,6 +38,8 @@ public:
     void CreateWindowSurface(VkInstance instance, VkSurfaceKHR* outSurface);
     void SetEventCallback(const EventCallbackFn& callback) { m_Data.Callback = callback; }
 
+	void* GetWindowPtr() const { return static_cast<void*>(m_WindowHandle); }
+
 private:
     void Initialize(const WindowProperties& props);
 

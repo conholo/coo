@@ -7,7 +7,7 @@
 class VulkanFramebuffer
 {
 public:
-    explicit VulkanFramebuffer(std::string debugName = "Framebuffer");
+    explicit VulkanFramebuffer(std::string debugName = "GetHandle");
     ~VulkanFramebuffer();
 
     void Create(VkRenderPass renderPass,
@@ -17,7 +17,7 @@ public:
 
     void Destroy();
 
-    VkFramebuffer Framebuffer() const { return m_Framebuffer; }
+    VkFramebuffer GetHandle() const { return m_Framebuffer; }
     uint32_t Width() const { return m_Width; }
     uint32_t Height() const { return m_Height; }
     uint32_t LayerCount() const { return m_Layers; }

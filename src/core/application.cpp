@@ -46,8 +46,17 @@ void Application::CreateGameObjects(Scene& scene, VulkanRenderer& renderer)
 	floor.NormalMap = marbleNormal;
 }
 
+Application& Application::Get()
+{
+	assert(s_Application && "No instance of Application has been initialized.");
+	return *s_Application;
+}
+
 Application::Application()
 {
+	assert(!s_Application && "Only one instance of Application is currently supported.");
+	s_Application = this;
+
     m_Window = std::make_unique<Window>();
     m_Window->SetEventCallback(BIND_FN(Application::OnEvent));
     VulkanContext::Initialize("coo", 1.0, m_Window.get());
@@ -101,6 +110,7 @@ void Application::OnEvent(Event& event)
     EventDispatcher dispatcher(event);
     dispatcher.Dispatch<WindowClosedEvent>(BIND_FN(Application::OnWindowClose));
     dispatcher.Dispatch<WindowResizedEvent>(BIND_FN(Application::OnWindowResize));
+	m_Renderer->OnEvent(event);
     m_Camera.OnEvent(event);
 }
 

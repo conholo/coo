@@ -83,6 +83,11 @@ public:
 		return GetAssetDirectory() / "shaders";
 	}
 
+	static fs::path GetFontDirectory()
+	{
+		return GetAssetDirectory() / "fonts";
+	}
+
 	static fs::path GetTextureDirectory()
 	{
 		return GetAssetDirectory() / "textures";

@@ -202,10 +202,10 @@ void VulkanShaderReflection::ReflectPushConstants(const spirv_cross::Compiler& c
 
             m_PushConstantRanges.push_back(range);
 
-            std::cout << "Push Constant: " << range.name
-                      << " (Offset: " << range.offset
-                      << ", Size: " << range.size << ")" << std::endl;
-        }
+			std::cout << "Push Constant Range: " << range.name
+					  << ", Stage: " << range.stageFlags
+					  << ", Offset: " << range.offset
+					  << ", Size: " << range.size << std::endl;        }
     }
 }
 

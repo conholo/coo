@@ -5,7 +5,8 @@
 #include <array>
 #include <stdexcept>
 
-VulkanSwapchainRenderer::VulkanSwapchainRenderer(Window& windowRef) : m_WindowRef(windowRef)
+VulkanSwapchainRenderer::VulkanSwapchainRenderer(Window& windowRef)
+	: m_WindowRef(windowRef)
 {
 	CreateDrawCommandBuffers();
 	RecreateSwapchain();
@@ -13,7 +14,7 @@ VulkanSwapchainRenderer::VulkanSwapchainRenderer(Window& windowRef) : m_WindowRe
 
 void VulkanSwapchainRenderer::Shutdown()
 {
-	FreeCommandBuffers();
+	m_DrawCommandBuffers.clear();
 	if(m_Swapchain != nullptr)
 	{
 		m_Swapchain->Destroy();
@@ -43,7 +44,7 @@ void VulkanSwapchainRenderer::RecreateSwapchain()
 			throw std::runtime_error("Swap chain imageInfo format has changed!");
 	}
 
-	FreeCommandBuffers();
+	m_DrawCommandBuffers.clear();
 	CreateDrawCommandBuffers();
 	if(m_RecreateSwapchainCallback)
 		m_RecreateSwapchainCallback(m_Swapchain->Width(), m_Swapchain->Height());
@@ -54,37 +55,21 @@ void VulkanSwapchainRenderer::RecreateSwapchain()
 void VulkanSwapchainRenderer::CreateDrawCommandBuffers()
 {
 	m_DrawCommandBuffers.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
-
-	VkCommandBufferAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = VulkanContext::Get().GraphicsCommandPool();
-	allocInfo.commandBufferCount = static_cast<uint32_t>(m_DrawCommandBuffers.size());
-
-	if (vkAllocateCommandBuffers(VulkanContext::Get().Device(), &allocInfo, m_DrawCommandBuffers.data()) != VK_SUCCESS)
+	for(int i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; ++i)
 	{
-		throw std::runtime_error("Failed to allocate command buffers!");
+		auto debugName = "Swapchain Draw Command Buffer " + std::to_string(i);
+		m_DrawCommandBuffers[i] = std::make_shared<VulkanCommandBuffer>(VulkanContext::Get().GraphicsCommandPool(), true, debugName);
 	}
 }
 
-void VulkanSwapchainRenderer::FreeCommandBuffers()
-{
-	vkFreeCommandBuffers(
-		VulkanContext::Get().Device(),
-		VulkanContext::Get().GraphicsCommandPool(),
-		static_cast<uint32_t>(m_DrawCommandBuffers.size()),
-		m_DrawCommandBuffers.data());
-	m_DrawCommandBuffers.clear();
-}
-
-VkCommandBuffer VulkanSwapchainRenderer::BeginFrame(uint32_t frameIndex)
+std::weak_ptr<VulkanCommandBuffer> VulkanSwapchainRenderer::BeginFrame(uint32_t frameIndex)
 {
 	auto result = m_Swapchain->AcquireNextImage(frameIndex, &m_CurrentImageIndex);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR)
 	{
 		RecreateSwapchain();
-		return VK_NULL_HANDLE;
+		return {};	// Default constructed weak ptr.
 	}
 	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
 	{
@@ -92,7 +77,7 @@ VkCommandBuffer VulkanSwapchainRenderer::BeginFrame(uint32_t frameIndex)
 	}
 
 	vkResetFences(VulkanContext::Get().Device(), 1, &m_Swapchain->m_InFlightFences[frameIndex]);
-	vkResetCommandBuffer(m_DrawCommandBuffers[frameIndex], 0);
+	m_DrawCommandBuffers[frameIndex]->Reset();
 	return m_DrawCommandBuffers[frameIndex];
 }
 

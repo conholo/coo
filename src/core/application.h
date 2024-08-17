@@ -15,10 +15,13 @@ public:
     void Run();
     void OnEvent(Event& event);
 
+	static Application& Get();
+	Window& GetWindow() const { return *m_Window; }
+	VulkanRenderer& GetRenderer() const { return *m_Renderer; }
+
 private:
     bool OnWindowClose(WindowClosedEvent& event);
     bool OnWindowResize(WindowResizedEvent& event);
-
 	void CreateGameObjects(Scene& scene, VulkanRenderer& renderer);
 
     std::shared_ptr<Window> m_Window;
@@ -27,4 +30,5 @@ private:
     Camera m_Camera;
 
 	bool m_ApplicationIsRunning = true;
+	inline static Application* s_Application = nullptr;
 };

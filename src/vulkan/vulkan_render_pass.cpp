@@ -120,6 +120,7 @@ void VulkanRenderPass::CreateRenderPass()
     renderPassInfo.pDependencies = m_Dependencies.data();
 
     VK_CHECK_RESULT(vkCreateRenderPass(VulkanContext::Get().Device(), &renderPassInfo, nullptr, &m_RenderPass));
+	SetDebugUtilsObjectName(VulkanContext::Get().Device(), VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)m_RenderPass, m_DebugName.c_str());
 }
 
 uint32_t VulkanRenderPass::ColorAttachmentCount()

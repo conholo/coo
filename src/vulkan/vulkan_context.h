@@ -50,6 +50,8 @@ public:
     VkQueue PresentQueue() const { return m_LogicalDevice.m_PresentQueue; }
     VkQueue ComputeQueue() const { return m_LogicalDevice.m_ComputeQueue; }
 
+	VkCommandBuffer CreateSecondaryGraphicsCommandBuffer(const std::string& debugName);
+
 public:
     VkCommandBuffer BeginSingleTimeCommands(QueueFamilyType family = QueueFamilyType::Graphics);
     void EndSingleTimeCommand(VkCommandBuffer commandBuffer, QueueFamilyType family = QueueFamilyType::Graphics);

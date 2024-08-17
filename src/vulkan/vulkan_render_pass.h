@@ -57,7 +57,7 @@ public:
     void BeginPass(VkCommandBuffer commandBuffer, VkRenderPassBeginInfo beginInfo, VkExtent2D extent);
     void EndPass(VkCommandBuffer commandBuffer);
 
-    VkRenderPass RenderPass() const { return m_RenderPass; }
+    VkRenderPass GetHandle() const { return m_RenderPass; }
     uint32_t ColorAttachmentCount();
     static bool FormatIsDepth(ImageFormat format);
 

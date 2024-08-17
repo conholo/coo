@@ -28,6 +28,7 @@ void VulkanFramebuffer::Create(
     framebufferInfo.layers = layers;
 
     VK_CHECK_RESULT(vkCreateFramebuffer(VulkanContext::Get().Device(), &framebufferInfo, nullptr, &m_Framebuffer));
+	SetDebugUtilsObjectName(VulkanContext::Get().Device(), VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)m_Framebuffer, m_DebugName.c_str());
 
     m_Width = width;
     m_Height = height;

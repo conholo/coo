@@ -69,7 +69,7 @@ class VulkanGraphicsPipelineBuilder {
 public:
     explicit VulkanGraphicsPipelineBuilder(std::string debugName = "GraphicsPipeline");
 
-    VulkanGraphicsPipelineBuilder& SetShaders(const std::shared_ptr<VulkanShader>& vertexShader, const std::shared_ptr<VulkanShader>& fragmentShader);
+    VulkanGraphicsPipelineBuilder& SetShaders(VulkanShader& vertexShader, VulkanShader& fragmentShader);
     VulkanGraphicsPipelineBuilder& SetVertexInputDescription(const VertexInputDescription& description = VertexInputDescription());
     VulkanGraphicsPipelineBuilder& SetPrimitiveTopology(VkPrimitiveTopology topology);
     VulkanGraphicsPipelineBuilder& SetPolygonMode(VkPolygonMode mode);
@@ -78,9 +78,9 @@ public:
     VulkanGraphicsPipelineBuilder& SetDepthTesting(bool enable, bool writeEnable, VkCompareOp compareOp);
     VulkanGraphicsPipelineBuilder& SetColorBlendAttachment(uint32_t attachmentIndex, bool blendEnable, VkColorComponentFlags colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT);
     VulkanGraphicsPipelineBuilder& SetLayout(VkPipelineLayout layout);
-    VulkanGraphicsPipelineBuilder& SetRenderPass(const VulkanRenderPass* renderPass, uint32_t subpass = 0);
+    VulkanGraphicsPipelineBuilder& SetRenderPass(VulkanRenderPass* renderPass, uint32_t subpass = 0);
 
-    std::unique_ptr<VulkanGraphicsPipeline> Build();
+    std::shared_ptr<VulkanGraphicsPipeline> Build();
 
 private:
     std::string m_DebugName;

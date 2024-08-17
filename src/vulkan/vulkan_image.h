@@ -55,7 +55,6 @@ public:
     void SetExpectedLayout(VkImageLayout expectedLayout);
 
 private:
-    void HandleSwapchainImage();
     void CreateImage();
     void CreateImageView(uint32_t mip);
     void UpdateImageViews();

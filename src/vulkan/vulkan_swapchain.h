@@ -11,7 +11,7 @@ class VulkanSwapchain
 public:
     static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
-    VulkanSwapchain(VkExtent2D windowExtent);
+    explicit VulkanSwapchain(VkExtent2D windowExtent);
     VulkanSwapchain(VkExtent2D windowExtent, std::shared_ptr<VulkanSwapchain> previous);
 
     VulkanSwapchain(const VulkanSwapchain &) = delete;
@@ -49,6 +49,7 @@ private:
 	std::vector<VkFence> m_InFlightFences;
 	std::vector<VkFence> m_ImagesInFlight;
 	std::vector<VkSemaphore> m_ImageAvailableSemaphores;
+	std::vector<VkSemaphore> m_RenderCompleteSemaphores;
 
     VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;
     std::shared_ptr<VulkanSwapchain> m_PreviousSwapchain;

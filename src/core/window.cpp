@@ -128,4 +128,3 @@ void Window::CreateWindowSurface(VkInstance instance, VkSurfaceKHR *outSurface)
     if(glfwCreateWindowSurface(instance, m_WindowHandle, nullptr, outSurface) != VK_SUCCESS)
         throw std::runtime_error("Failed to create window surface.");
 }
-

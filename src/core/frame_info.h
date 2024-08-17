@@ -3,7 +3,9 @@
 #include "camera.h"
 #include "game_object.h"
 #include "scene.h"
+
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_command_buffer.h>
 
 struct GlobalUbo
 {
@@ -17,11 +19,11 @@ struct GlobalUbo
 struct FrameInfo
 {
     size_t FrameIndex;
+	uint32_t ImageIndex;
     float DeltaTime;
     Scene& ActiveScene;
     std::weak_ptr<VulkanBuffer> GlobalUbo;
-    VkCommandBuffer DrawCommandBuffer;
-	VkSemaphore SignalForPresentation;
-	VkSemaphore WaitForGraphicsSubmit;
+	std::weak_ptr<VulkanCommandBuffer> SwapchainSubmitCommandBuffer;
+	VkSemaphore RendererCompleteSemaphore;
     Camera& Cam;
 };

@@ -87,33 +87,25 @@ void VulkanImage2D::Invalidate()
     Release();
     m_MipLayouts.resize(m_Specification.Mips, VK_IMAGE_LAYOUT_UNDEFINED);
 
-    if (m_Specification.Usage == ImageUsage::Swapchain)
+	if (m_Specification.CreateSampler)
+		CreateSampler();
+
+	if (m_Specification.Usage == ImageUsage::Swapchain)
     {
-        HandleSwapchainImage();
+		m_Image = m_Specification.ExistingImage;
         SetExpectedLayout(VK_IMAGE_LAYOUT_UNDEFINED);
     }
-    else
+	else
     {
         CreateImage();
-        if (m_Specification.CreateSampler)
-        {
-            CreateSampler();
-        }
-
         VkImageLayout initialLayout = DetermineInitialLayout();
         VkCommandBuffer commandBuffer = VulkanContext::Get().BeginSingleTimeCommands();
         TransitionLayout(commandBuffer, initialLayout, 0, m_Specification.Mips);
         VulkanContext::Get().EndSingleTimeCommand(commandBuffer);
     }
 
-    CreateImageView(0);
+	CreateImageView(0);
     UpdateImageViews();
-}
-
-void VulkanImage2D::HandleSwapchainImage()
-{
-    m_Image = m_Specification.ExistingImage;
-    m_Sampler = VK_NULL_HANDLE;
 }
 
 void VulkanImage2D::CreateImage()
@@ -232,7 +224,8 @@ void VulkanImage2D::CreateImageView(uint32_t mip)
         viewInfo.format = m_Specification.SwapchainFormat;
         viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         viewInfo.subresourceRange.levelCount = 1;
-    } else
+    }
+	else
     {
         viewInfo.format = ImageUtils::VulkanImageFormat(m_Specification.Format);
         viewInfo.subresourceRange.aspectMask = ImageUtils::IsDepthFormat(m_Specification.Format)
@@ -353,6 +346,13 @@ void VulkanImage2D::UpdateImageViews()
 
     if (m_MipViews.empty())
         CreateImageView(0);
+}
+
+void VulkanImage2D::TransitionLayout(VkImageLayout newLayout, uint32_t baseMipLevel, uint32_t levelCount)
+{
+	auto cmd = VulkanContext::Get().BeginSingleTimeCommands();
+	TransitionLayout(cmd, newLayout, baseMipLevel, levelCount);
+	VulkanContext::Get().EndSingleTimeCommand(cmd);
 }
 
 void VulkanImage2D::TransitionLayout(VkCommandBuffer commandBuffer, VkImageLayout newLayout, uint32_t baseMipLevel, uint32_t levelCount)
@@ -477,13 +477,6 @@ void VulkanImage2D::SetExpectedLayout(VkImageLayout expectedLayout)
     {
         view->UpdateDescriptorInfo(expectedLayout, m_Sampler);
     }
-}
-
-void VulkanImage2D::TransitionLayout(VkImageLayout newLayout, uint32_t baseMipLevel, uint32_t levelCount)
-{
-	auto cmd = VulkanContext::Get().BeginSingleTimeCommands();
-	TransitionLayout(cmd, newLayout, baseMipLevel, levelCount);
-	VulkanContext::Get().EndSingleTimeCommand(cmd);
 }
 
 VulkanImageView::VulkanImageView(VulkanImage2D* image, uint32_t mip)

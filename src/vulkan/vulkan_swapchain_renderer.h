@@ -8,6 +8,8 @@
 #include <cassert>
 #include <functional>
 
+class VulkanCommandBuffer;
+
 class VulkanSwapchainRenderer
 {
 public:
@@ -25,21 +27,22 @@ public:
     VulkanSwapchain& GetSwapchain() { return *m_Swapchain; }
 	VkSemaphore GetImageAvailableSemaphore(uint32_t index) { return m_Swapchain->m_ImageAvailableSemaphores[index]; }
 	uint32_t CurrentImageIndex() const { return m_CurrentImageIndex; }
+	std::weak_ptr<VulkanCommandBuffer> GetDrawCmdBuffer(uint32_t frameIndex) const { return m_DrawCommandBuffers[frameIndex]; }
 
-    VkCommandBuffer BeginFrame(uint32_t frameIndex);
+	std::weak_ptr<VulkanCommandBuffer> BeginFrame(uint32_t frameIndex);
 	void EndFrame(FrameInfo& frameInfo);
 
 private:
 
     void CreateDrawCommandBuffers();
-    void FreeCommandBuffers();
     void RecreateSwapchain();
 
-    Window &m_WindowRef;
+    Window& m_WindowRef;
     OnRecreateSwapchainCallbackFn m_RecreateSwapchainCallback;
+	std::vector<VkSemaphore> m_RenderCompleteSemaphores;
 
     std::unique_ptr<VulkanSwapchain> m_Swapchain;
-    std::vector<VkCommandBuffer> m_DrawCommandBuffers;
+    std::vector<std::shared_ptr<VulkanCommandBuffer>> m_DrawCommandBuffers;
     uint32_t m_CurrentImageIndex{0};
 
 	friend class VulkanRenderer;

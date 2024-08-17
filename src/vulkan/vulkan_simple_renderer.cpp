@@ -129,7 +129,7 @@ void VulkanSimpleRenderer::CreateSimplePipeline()
 		m_SimpleFragmentShader = std::make_shared<VulkanShader>("../assets/shaders/simple.frag", ShaderType::Fragment);
 	}
 
-	m_SimpleMaterialLayout = std::make_shared<VulkanMaterialLayout>(m_SimpleVertexShader, m_SimpleFragmentShader);
+	m_SimpleMaterialLayout = std::make_shared<VulkanMaterialLayout>(m_SimpleVertexShader, m_SimpleFragmentShader, "Simple Material Layout");
 	m_SimpleBaseMaterial = std::make_shared<VulkanMaterial>(m_SimpleMaterialLayout);
 
 	auto builder = VulkanGraphicsPipelineBuilder("Simple Pipeline")
@@ -159,8 +159,8 @@ void VulkanSimpleRenderer::CreateSimpleFramebuffers()
 		if (sharedImage)
 			attachments.push_back(sharedImage->GetView()->GetImageView());
 
-		m_SimpleFramebuffers[i] = std::make_unique<VulkanFramebuffer>("Simple Framebuffer " + std::to_string(i));
-		m_SimpleFramebuffers[i]->Create(m_SimplePass->RenderPass(), attachments, extent.width, extent.height);
+		m_SimpleFramebuffers[i] = std::make_unique<VulkanFramebuffer>("Simple GetHandle " + std::to_string(i));
+		m_SimpleFramebuffers[i]->Create(m_SimplePass->GetHandle(), attachments, extent.width, extent.height);
 	}
 }
 
@@ -169,20 +169,20 @@ void VulkanSimpleRenderer::Render(FrameInfo& frameInfo)
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-	vkBeginCommandBuffer(frameInfo.DrawCommandBuffer, &beginInfo);
+	vkBeginCommandBuffer(frameInfo.SwapchainSubmitCommandBuffer, &beginInfo);
 	{
 		uint32_t swapchainImageIndex = m_Renderer->GetCurrentSwapchainImageIndex();
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.renderPass = m_SimplePass->RenderPass();
-		renderPassInfo.framebuffer = m_SimpleFramebuffers[swapchainImageIndex]->Framebuffer();
+		renderPassInfo.renderPass = m_SimplePass->GetHandle();
+		renderPassInfo.framebuffer = m_SimpleFramebuffers[swapchainImageIndex]->GetHandle();
 
 		renderPassInfo.renderArea.offset = {0, 0};
 		renderPassInfo.renderArea.extent = m_Renderer->VulkanSwapchain().Extent();
 
-		m_SimplePass->BeginPass(frameInfo.DrawCommandBuffer, renderPassInfo, m_Renderer->VulkanSwapchain().Extent());
+		m_SimplePass->BeginPass(frameInfo.SwapchainSubmitCommandBuffer, renderPassInfo, m_Renderer->VulkanSwapchain().Extent());
 		{
-			m_SimplePipeline->Bind(frameInfo.DrawCommandBuffer);
+			m_SimplePipeline->Bind(frameInfo.SwapchainSubmitCommandBuffer);
 			m_SimpleBaseMaterial->UpdateDescriptorSets(frameInfo.FrameIndex,
 				{
 					{0,
@@ -200,15 +200,14 @@ void VulkanSimpleRenderer::Render(FrameInfo& frameInfo)
 							}
 						}
 					});
-			m_SimpleBaseMaterial->BindDescriptors(frameInfo.FrameIndex, frameInfo.DrawCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS);
-			vkCmdDraw(frameInfo.DrawCommandBuffer, 3, 1, 0, 0);
+			m_SimpleBaseMaterial->BindDescriptors(frameInfo.FrameIndex, frameInfo.SwapchainSubmitCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS);
+			vkCmdDraw(frameInfo.SwapchainSubmitCommandBuffer, 3, 1, 0, 0);
 		}
-		m_SimplePass->EndPass(frameInfo.DrawCommandBuffer);
+		m_SimplePass->EndPass(frameInfo.SwapchainSubmitCommandBuffer);
 	}
-	vkEndCommandBuffer(frameInfo.DrawCommandBuffer);
+	vkEndCommandBuffer(frameInfo.SwapchainSubmitCommandBuffer);
 
-	frameInfo.SignalForPresentation = m_SimpleRenderFinishedSemaphores[frameInfo.FrameIndex];
-	frameInfo.WaitForGraphicsSubmit = m_Renderer->ImageAvailableSemaphore(frameInfo.FrameIndex);
+	frameInfo.RendererCompleteSemaphore = m_SimpleRenderFinishedSemaphores[frameInfo.FrameIndex];
 }
 
 void VulkanSimpleRenderer::Resize(uint32_t width, uint32_t height)

@@ -2,14 +2,16 @@
 
 #include "core/frame_info.h"
 #include "irenderer.h"
-#include "vulkan_framebuffer.h"
-#include "vulkan_graphics_pipeline.h"
-#include "vulkan_image.h"
-#include "vulkan_material.h"
-#include "vulkan_render_pass.h"
-#include "vulkan_texture.h"
 
+class VulkanMaterial;
+class VulkanRenderPass;
+class VulkanTexture2D;
+class VulkanImage2D;
 class VulkanRenderer;
+class VulkanGraphicsPipeline;
+class VulkanFramebuffer;
+class VulkanCommandBuffer;
+
 class VulkanDeferredRenderer : public IRenderer
 {
 public:
@@ -21,6 +23,10 @@ public:
     void Render(FrameInfo& frameInfo) override;
     void Resize(uint32_t width, uint32_t height) override;
     void RegisterGameObject(GameObject& gameObjectRef) override;
+	void OnEvent(Event& event) override;
+	VulkanRenderPass& GetRenderFinishedRenderPass() override { return *m_CompositionPass; }
+	VulkanFramebuffer& GetRenderFinishedFramebuffer(uint32_t frameIndex) override { return *m_CompositionFramebuffers[frameIndex]; }
+	VkSemaphore GetRendererFinishedSemaphore(uint32_t frameIndex) override { return m_LightingCompleteSemaphores[frameIndex]; }
 
 private:
 	void RecordGBufferCommandBuffer(FrameInfo& frameInfo);
@@ -60,12 +66,11 @@ private:
     std::vector<std::vector<std::shared_ptr<VulkanTexture2D>>> m_GBufferTextures{VulkanSwapchain::MAX_FRAMES_IN_FLIGHT};
     std::vector<std::shared_ptr<VulkanTexture2D>> m_LightingTextures{VulkanSwapchain::MAX_FRAMES_IN_FLIGHT};
 
-	std::vector<VkCommandBuffer> m_GBufferCommandBuffers;
-	std::vector<VkCommandBuffer> m_LightingCommandBuffers;
+	std::vector<std::unique_ptr<VulkanCommandBuffer>> m_GBufferCommandBuffers;
+	std::vector<std::unique_ptr<VulkanCommandBuffer>> m_LightingCommandBuffers;
 
 	std::vector<VkSemaphore> m_GBufferCompleteSemaphores;
 	std::vector<VkSemaphore> m_LightingCompleteSemaphores;
-	std::vector<VkSemaphore> m_CompositionRenderCompleteSemaphores;
 
     // These framebuffers will be resized on creation or resize.
     std::vector<std::unique_ptr<VulkanFramebuffer>> m_GBufferFramebuffers;
@@ -101,6 +106,4 @@ private:
 
     std::shared_ptr<VulkanMaterialLayout> m_CompositionMaterialLayout;
     std::shared_ptr<VulkanMaterial> m_CompositionMaterial;
-
-	std::shared_ptr<VulkanTexture2D> m_SimpleTextureA;
 };

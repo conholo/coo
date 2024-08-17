@@ -1,9 +1,12 @@
 // vulkan_graphics_pipeline.cpp
 
 #include "vulkan_graphics_pipeline.h"
+
 #include "vulkan_context.h"
-#include <stdexcept>
+#include "vulkan_utils.h"
+
 #include <iostream>
+#include <stdexcept>
 
 VulkanGraphicsPipeline::VulkanGraphicsPipeline(std::string debugName)
         : m_DebugName(std::move(debugName))
@@ -163,11 +166,8 @@ void VulkanGraphicsPipeline::Build()
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineInfo.basePipelineIndex = -1;
 
-    VkResult result = vkCreateGraphicsPipelines(VulkanContext::Get().Device(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_Pipeline);
-    if (result != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create graphics pipeline: " + m_DebugName);
-    }
+	VK_CHECK_RESULT(vkCreateGraphicsPipelines(VulkanContext::Get().Device(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_Pipeline));
+	SetDebugUtilsObjectName(VulkanContext::Get().Device(), VK_OBJECT_TYPE_PIPELINE, (uint64_t)m_Pipeline, m_DebugName.c_str());
 }
 
 VulkanGraphicsPipelineBuilder::VulkanGraphicsPipelineBuilder(std::string debugName)
@@ -228,19 +228,19 @@ void VulkanGraphicsPipelineBuilder::SetupDefaultStates()
     m_DynamicState.pDynamicStates = m_DynamicStates.data();
 }
 
-VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetShaders(const std::shared_ptr<VulkanShader>& vertexShader, const std::shared_ptr<VulkanShader>& fragmentShader)
+VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetShaders(VulkanShader& vertexShader, VulkanShader& fragmentShader)
 {
     m_ShaderStages.resize(2);
     m_ShaderStages[0] = {};
     m_ShaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    m_ShaderStages[0].stage = vertexShader->GetShaderStage();
-    m_ShaderStages[0].module = vertexShader->GetShaderModule();
+    m_ShaderStages[0].stage = vertexShader.GetShaderStage();
+    m_ShaderStages[0].module = vertexShader.GetShaderModule();
     m_ShaderStages[0].pName = "main";
 
     m_ShaderStages[1] = {};
     m_ShaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    m_ShaderStages[1].stage = fragmentShader->GetShaderStage();
-    m_ShaderStages[1].module = fragmentShader->GetShaderModule();
+    m_ShaderStages[1].stage = fragmentShader.GetShaderStage();
+    m_ShaderStages[1].module = fragmentShader.GetShaderModule();
     m_ShaderStages[1].pName = "main";
 
     return *this;
@@ -337,9 +337,9 @@ VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetLayout(VkPipeli
     return *this;
 }
 
-VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetRenderPass(const VulkanRenderPass* renderPass, uint32_t subpass)
+VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetRenderPass(VulkanRenderPass* renderPass, uint32_t subpass)
 {
-    m_RenderPass = renderPass->RenderPass();
+    m_RenderPass = renderPass->GetHandle();
     m_Subpass = subpass;
 
     // Set up color blend attachments based on the render pass
@@ -362,9 +362,9 @@ VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetRenderPass(cons
     return *this;
 }
 
-std::unique_ptr<VulkanGraphicsPipeline> VulkanGraphicsPipelineBuilder::Build()
+std::shared_ptr<VulkanGraphicsPipeline> VulkanGraphicsPipelineBuilder::Build()
 {
-    auto pipeline = std::make_unique<VulkanGraphicsPipeline>(m_DebugName);
+    auto pipeline = std::make_shared<VulkanGraphicsPipeline>(m_DebugName);
     pipeline->SetShaderStages(std::move(m_ShaderStages));
     pipeline->SetVertexInputState(m_VertexInputState, std::move(m_BindingDescriptions), std::move(m_AttributeDescriptions));
     pipeline->SetInputAssemblyState(m_InputAssemblyState);

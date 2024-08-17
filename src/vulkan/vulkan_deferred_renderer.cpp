@@ -28,18 +28,7 @@ void VulkanDeferredRenderer::Shutdown()
 {
 	auto& contextRef = VulkanContext::Get();
 	auto device = contextRef.Device();
-	vkFreeCommandBuffers(
-		device,
-		contextRef.GraphicsCommandPool(),
-		static_cast<uint32_t>(m_GBufferCommandBuffers.size()),
-		m_GBufferCommandBuffers.data());
 	m_GBufferCommandBuffers.clear();
-
-	vkFreeCommandBuffers(
-		device,
-		contextRef.GraphicsCommandPool(),
-		static_cast<uint32_t>(m_LightingCommandBuffers.size()),
-		m_LightingCommandBuffers.data());
 	m_LightingCommandBuffers.clear();
 
 	for (size_t i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; i++)
@@ -48,12 +37,9 @@ void VulkanDeferredRenderer::Shutdown()
 		m_GBufferCompleteSemaphores[i] = VK_NULL_HANDLE;
 		vkDestroySemaphore(device, m_LightingCompleteSemaphores[i], nullptr);
 		m_LightingCompleteSemaphores[i] = VK_NULL_HANDLE;
-		vkDestroySemaphore(device, m_CompositionRenderCompleteSemaphores[i], nullptr);
-		m_CompositionRenderCompleteSemaphores[i] = VK_NULL_HANDLE;
 	}
 	m_GBufferCompleteSemaphores.clear();
 	m_LightingCompleteSemaphores.clear();
-	m_CompositionRenderCompleteSemaphores.clear();
 
 	// Textures/Attachments
 	m_GBufferTextures.clear();
@@ -122,17 +108,17 @@ void VulkanDeferredRenderer::RegisterGameObject(GameObject& gameObjectRef)
 
 void VulkanDeferredRenderer::CreateCommandBuffers()
 {
-	VkCommandBufferAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = VulkanContext::Get().GraphicsCommandPool();
-	allocInfo.commandBufferCount = VulkanSwapchain::MAX_FRAMES_IN_FLIGHT;
-
 	m_GBufferCommandBuffers.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
 	m_LightingCommandBuffers.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
 
-	vkAllocateCommandBuffers(VulkanContext::Get().Device(), &allocInfo, m_GBufferCommandBuffers.data());
-	vkAllocateCommandBuffers(VulkanContext::Get().Device(), &allocInfo, m_LightingCommandBuffers.data());
+	for(int i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; ++i)
+	{
+		auto gBufferCmdName = "GBuffer Command Buffer " + std::to_string(i);
+		m_GBufferCommandBuffers[i] = std::make_unique<VulkanCommandBuffer>(VulkanContext::Get().GraphicsCommandPool(), true, gBufferCmdName);
+
+		auto lightingCmdName = "Lighting Command Buffer " + std::to_string(i);
+		m_LightingCommandBuffers[i] = std::make_unique<VulkanCommandBuffer>(VulkanContext::Get().GraphicsCommandPool(), true, lightingCmdName);
+	}
 }
 
 void VulkanDeferredRenderer::CreateSynchronizationPrimitives()
@@ -142,13 +128,11 @@ void VulkanDeferredRenderer::CreateSynchronizationPrimitives()
 
 	m_GBufferCompleteSemaphores.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
 	m_LightingCompleteSemaphores.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
-	m_CompositionRenderCompleteSemaphores.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
 
 	for (size_t i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		vkCreateSemaphore(VulkanContext::Get().Device(), &semaphoreInfo, nullptr, &m_GBufferCompleteSemaphores[i]);
 		vkCreateSemaphore(VulkanContext::Get().Device(), &semaphoreInfo, nullptr, &m_LightingCompleteSemaphores[i]);
-		vkCreateSemaphore(VulkanContext::Get().Device(), &semaphoreInfo, nullptr, &m_CompositionRenderCompleteSemaphores[i]);
 	}
 }
 
@@ -176,13 +160,13 @@ void VulkanDeferredRenderer::CreateShaders()
 
 void VulkanDeferredRenderer::CreateMaterials()
 {
-	m_GBufferMaterialLayout = std::make_shared<VulkanMaterialLayout>(m_GBufferVertexShader, m_GBufferFragmentShader);
+	m_GBufferMaterialLayout = std::make_shared<VulkanMaterialLayout>(m_GBufferVertexShader, m_GBufferFragmentShader, "GBuffer Material Layout");
 	m_GBufferBaseMaterial = std::make_shared<VulkanMaterial>(m_GBufferMaterialLayout);
 
-	m_LightingMaterialLayout = std::make_shared<VulkanMaterialLayout>(m_FullScreenQuadVertexShader, m_LightingFragmentShader);
+	m_LightingMaterialLayout = std::make_shared<VulkanMaterialLayout>(m_FullScreenQuadVertexShader, m_LightingFragmentShader, "Lighting Material Layout");
 	m_LightingMaterial = std::make_shared<VulkanMaterial>(m_LightingMaterialLayout);
 
-	m_CompositionMaterialLayout = std::make_shared<VulkanMaterialLayout>(m_FullScreenQuadVertexShader, m_CompositionFragmentShader);
+	m_CompositionMaterialLayout = std::make_shared<VulkanMaterialLayout>(m_FullScreenQuadVertexShader, m_CompositionFragmentShader, "Composition Material Layout");
 	m_CompositionMaterial = std::make_shared<VulkanMaterial>(m_CompositionMaterialLayout);
 }
 
@@ -381,8 +365,8 @@ void VulkanDeferredRenderer::CreateGBufferFramebuffers()
 		for (const auto& texture : m_GBufferTextures[i])
 			attachments.push_back(texture->GetImage()->GetView()->GetImageView());
 
-		m_GBufferFramebuffers[i] = std::make_unique<VulkanFramebuffer>("G-Buffer Framebuffer " + std::to_string(i));
-		m_GBufferFramebuffers[i]->Create(m_GBufferPass->RenderPass(), attachments, extent.width, extent.height);
+		m_GBufferFramebuffers[i] = std::make_unique<VulkanFramebuffer>("G-Buffer GetHandle " + std::to_string(i));
+		m_GBufferFramebuffers[i]->Create(m_GBufferPass->GetHandle(), attachments, extent.width, extent.height);
 	}
 }
 
@@ -430,7 +414,7 @@ void VulkanDeferredRenderer::CreateLightingRenderPass()
 		.StoreOp = VK_ATTACHMENT_STORE_OP_STORE,
 		.InitialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.FinalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		.ClearValue{.color = {1.0f, 0.0f, 0.0f, 1.0f}}});
+		.ClearValue{.color = {0.0f, 0.0f, 0.0f, 1.0f}}});
 
 	// Set up subpass
 	SubpassDescription subpass;
@@ -445,8 +429,10 @@ void VulkanDeferredRenderer::CreateLightingRenderPass()
 	 * where nothing worked on the attachment to begin with.  Once the src work is completed, the earliest stage that this pass will
 	 * work on the attachment is in the COLOR_ATTACHMENT_OUTPUT stage where it will write to the attachment.
 	 */
-	m_LightingPass->AddDependency(VK_SUBPASS_EXTERNAL, 0, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+	m_LightingPass->AddDependency(
+		VK_SUBPASS_EXTERNAL, 0,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 		VK_DEPENDENCY_BY_REGION_BIT);
 
 	/*
@@ -455,8 +441,9 @@ void VulkanDeferredRenderer::CreateLightingRenderPass()
 	 * Wait on the color attachment writes to the lighting image from the previous dependency.
 	 * Once the writes are complete, this pass will prepare the attachment for fragment shader reads.
 	 */
-	m_LightingPass->AddDependency(0, VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+	m_LightingPass->AddDependency(0, VK_SUBPASS_EXTERNAL,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
 		VK_DEPENDENCY_BY_REGION_BIT);
 
 	m_LightingPass->Build();
@@ -485,8 +472,8 @@ void VulkanDeferredRenderer::CreateLightingFramebuffers()
 	for (uint32_t i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		std::vector<VkImageView> attachments{m_LightingTextures[i]->GetImage()->GetView()->GetImageView()};
-		m_LightingFramebuffers[i] = std::make_unique<VulkanFramebuffer>("Lighting Framebuffer " + std::to_string(i));
-		m_LightingFramebuffers[i]->Create(m_LightingPass->RenderPass(), attachments, extent.width, extent.height);
+		m_LightingFramebuffers[i] = std::make_unique<VulkanFramebuffer>("Lighting GetHandle " + std::to_string(i));
+		m_LightingFramebuffers[i]->Create(m_LightingPass->GetHandle(), attachments, extent.width, extent.height);
 	}
 }
 
@@ -505,49 +492,35 @@ void VulkanDeferredRenderer::CreateCompositionRenderPass()
 {
 	m_CompositionPass = std::make_unique<VulkanRenderPass>("Composition Render Pass");
 
+	auto swapchainImageFormat = Application::Get().GetRenderer().VulkanSwapchain().SwapchainImageFormat();
 	// Final color attachment (swapchain image)
-	m_CompositionPass->AddAttachment({.Type = AttachmentType::Color,
-		.Format = ImageUtils::VulkanFormatToImageFormat(m_Renderer->VulkanSwapchain().SwapchainImageFormat()),
+	m_CompositionPass->AddAttachment(
+	{
+		.Type = AttachmentType::Color,
+		.Format = ImageUtils::VulkanFormatToImageFormat(swapchainImageFormat),
 		.Samples = VK_SAMPLE_COUNT_1_BIT,
 		.LoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.StoreOp = VK_ATTACHMENT_STORE_OP_STORE,
 		.InitialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.FinalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-		.ClearValue = {.color = {0.0f, 0.0f, 0.0f, 1.0f}}});
+		.ClearValue = {.color = {0.0f, 0.0f, 0.0f, 1.0f}}
+	});
 
-	// Set up subpass
 	SubpassDescription subpass;
-	subpass.ColorAttachments = {0};	   // Final color output
+	subpass.ColorAttachments = {0};
 	m_CompositionPass->AddSubpass(subpass);
 
-	/*
-		Source Stage (srcStageMask):
-			This says: "We need to wait for the src stage to finish working on this attachment (if it was being worked on)."
-		Destination Stage (dstStageMask):
-			This says: "The earliest pipeline stage in our render pass where we will start working on this attachment is the dst
-	   stage."
-	*/
+	m_CompositionPass->AddDependency(
+		VK_SUBPASS_EXTERNAL, 0,
+		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_DEPENDENCY_BY_REGION_BIT);
 
-	/*
-	 * External -> Swapchain Color Attachment Writes
-	 *
-	 * The latest stage that worked on the swapchain image that must be waited on is BOTTOM OF THE PIPE(?) stage.
-	 * Once the src work is completed (swapchain image acquired(?)), the earliest stage that this pass will
-	 * work on the attachment is in the COLOR_ATTACHMENT_OUTPUT stage where it will write to the swapchain image.
-	 */
-	m_CompositionPass->AddDependency(VK_SUBPASS_EXTERNAL, 0, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_DEPENDENCY_BY_REGION_BIT);
-
-	/*
-	 * Swapchain Color Attachment Writes -> Bottom of the Pipe (presentation)
-	 *
-	 * Wait on the color attachment writes to the swapchain image from the previous dependency.
-	 * Once the writes are complete, this pass will prepare the swapchain image for presentation,
-	 * which to my knowledge, is conservatively done by using VK_PIPELINE_STAGE_BOTTOM_OF_PIPE as the dst stage
-	 * with 0 as the dst access mask.
-	 */
-	m_CompositionPass->AddDependency(0, VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0, VK_DEPENDENCY_BY_REGION_BIT);
+	m_CompositionPass->AddDependency(
+		0, VK_SUBPASS_EXTERNAL,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
+		VK_DEPENDENCY_BY_REGION_BIT);
 
 	m_CompositionPass->Build();
 }
@@ -569,21 +542,21 @@ void VulkanDeferredRenderer::CreateCompositionPipeline()
 
 void VulkanDeferredRenderer::CreateCompositionFramebuffers()
 {
-	VkExtent2D extent = m_Renderer->VulkanSwapchain().Extent();
-	uint32_t imageCount = m_Renderer->VulkanSwapchain().ImageCount();
+	VkExtent2D extent = Application::Get().GetRenderer().VulkanSwapchain().Extent();
+	uint32_t imageCount = Application::Get().GetRenderer().VulkanSwapchain().ImageCount();
 
 	m_CompositionFramebuffers.resize(imageCount);
 	for (uint32_t i = 0; i < imageCount; i++)
 	{
-		auto weakImage = m_Renderer->VulkanSwapchain().GetImage(i);
+		auto weakImage = Application::Get().GetRenderer().VulkanSwapchain().GetImage(i);
 		auto sharedImage = weakImage.lock();
 
 		std::vector<VkImageView> attachments;
 		if (sharedImage)
 			attachments.push_back(sharedImage->GetView()->GetImageView());
 
-		m_CompositionFramebuffers[i] = std::make_unique<VulkanFramebuffer>("Composition Framebuffer " + std::to_string(i));
-		m_CompositionFramebuffers[i]->Create(m_CompositionPass->RenderPass(), attachments, extent.width, extent.height);
+		m_CompositionFramebuffers[i] = std::make_unique<VulkanFramebuffer>("Composition GetHandle " + std::to_string(i));
+		m_CompositionFramebuffers[i]->Create(m_CompositionPass->GetHandle(), attachments, extent.width, extent.height);
 	}
 }
 
@@ -625,46 +598,30 @@ void VulkanDeferredRenderer::CreateCompositionFramebuffers()
 void VulkanDeferredRenderer::SubmitRenderPasses(uint32_t frameIndex)
 {
 	// Submit G-Buffer pass
-	VkSubmitInfo gBufferSubmitInfo{};
-	gBufferSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	std::vector<VkSemaphore> gBufferWaitSemaphores = {m_Renderer->ImageAvailableSemaphore(frameIndex)};
-	VkPipelineStageFlags gBufferWaitStages[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
-	std::vector<VkSemaphore> gBufferSignalSemaphores = {m_GBufferCompleteSemaphores[frameIndex]};
+	std::vector<VkSemaphore> gBufferWaitSemaphores = { m_Renderer->ImageAvailableSemaphore(frameIndex) };
+	std::vector<VkPipelineStageFlags> gBufferWaitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	std::vector<VkSemaphore> gBufferSignalSemaphores = { m_GBufferCompleteSemaphores[frameIndex] };
+	std::vector<VulkanCommandBuffer*> gBufferCommandBuffers = { m_GBufferCommandBuffers[frameIndex].get() };
 
-	gBufferSubmitInfo.waitSemaphoreCount = static_cast<uint32_t>(gBufferWaitSemaphores.size());
-	gBufferSubmitInfo.pWaitSemaphores = gBufferWaitSemaphores.data();
-	gBufferSubmitInfo.pWaitDstStageMask = gBufferWaitStages;
-
-	gBufferSubmitInfo.signalSemaphoreCount = static_cast<uint32_t>(gBufferSignalSemaphores.size());
-	gBufferSubmitInfo.pSignalSemaphores = gBufferSignalSemaphores.data();
-
-	gBufferSubmitInfo.commandBufferCount = 1;
-	gBufferSubmitInfo.pCommandBuffers = &m_GBufferCommandBuffers[frameIndex];
-
-	vkQueueSubmit(VulkanContext::Get().GraphicsQueue(), 1, &gBufferSubmitInfo, VK_NULL_HANDLE);
+	VulkanCommandBuffer::Submit(
+		VulkanContext::Get().GraphicsQueue(),
+		gBufferCommandBuffers,
+		gBufferWaitSemaphores,
+		gBufferWaitStages,
+		gBufferSignalSemaphores);
 
 	// Submit Lighting pass
-	VkSubmitInfo lightingSubmitInfo{};
-	lightingSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	std::vector<VkSemaphore> lightingWaitSemaphores = {m_GBufferCompleteSemaphores[frameIndex]};
-	VkPipelineStageFlags lightingWaitStages[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
-	std::vector<VkSemaphore> lightingSignalSemaphores = {m_LightingCompleteSemaphores[frameIndex]};
+	std::vector<VkSemaphore> lightingWaitSemaphores = { m_GBufferCompleteSemaphores[frameIndex] };
+	std::vector<VkPipelineStageFlags> lightingWaitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	std::vector<VkSemaphore> lightingSignalSemaphores = { m_LightingCompleteSemaphores[frameIndex] };
+	std::vector<VulkanCommandBuffer*> lightingCommandBuffers = { m_LightingCommandBuffers[frameIndex].get() };
 
-	lightingSubmitInfo.waitSemaphoreCount = static_cast<uint32_t>(lightingWaitSemaphores.size());
-	lightingSubmitInfo.pWaitSemaphores = lightingWaitSemaphores.data();
-	lightingSubmitInfo.pWaitDstStageMask = lightingWaitStages;
-
-	lightingSubmitInfo.signalSemaphoreCount = static_cast<uint32_t>(lightingSignalSemaphores.size());
-	lightingSubmitInfo.pSignalSemaphores = lightingSignalSemaphores.data();
-
-	lightingSubmitInfo.commandBufferCount = 1;
-	lightingSubmitInfo.pCommandBuffers = &m_LightingCommandBuffers[frameIndex];
-
-	vkQueueSubmit(VulkanContext::Get().GraphicsQueue(), 1, &lightingSubmitInfo, VK_NULL_HANDLE);
-
-	/*
-	 * Composition Pass will be submitted by the Swapchain Renderer.
-	 */
+	VulkanCommandBuffer::Submit(
+		VulkanContext::Get().GraphicsQueue(),
+		lightingCommandBuffers,
+		lightingWaitSemaphores,
+		lightingWaitStages,
+		lightingSignalSemaphores);
 }
 
 void VulkanDeferredRenderer::RecordGBufferCommandBuffer(FrameInfo& frameInfo)
@@ -673,9 +630,9 @@ void VulkanDeferredRenderer::RecordGBufferCommandBuffer(FrameInfo& frameInfo)
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
 	auto frameIndex = frameInfo.FrameIndex;
-	auto gBufferCmd = m_GBufferCommandBuffers[frameIndex];
+	auto gBufferCmdBufferHandle = m_GBufferCommandBuffers[frameIndex]->GetHandle();
 
-	vkBeginCommandBuffer(gBufferCmd, &beginInfo);
+	m_GBufferCommandBuffers[frameIndex]->Begin();
 
 	// Update internal host-side state to reflect the image transitions made during the render pass
 	for (size_t i = 0; i < m_GBufferTextures[frameIndex].size() - 1; ++i)
@@ -683,50 +640,47 @@ void VulkanDeferredRenderer::RecordGBufferCommandBuffer(FrameInfo& frameInfo)
 
 	VkRenderPassBeginInfo gBufferRenderPassInfo{};
 	gBufferRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	gBufferRenderPassInfo.renderPass = m_GBufferPass->RenderPass();
-	gBufferRenderPassInfo.framebuffer = m_GBufferFramebuffers[frameIndex]->Framebuffer();
+	gBufferRenderPassInfo.renderPass = m_GBufferPass->GetHandle();
+	gBufferRenderPassInfo.framebuffer = m_GBufferFramebuffers[frameIndex]->GetHandle();
 	gBufferRenderPassInfo.renderArea.offset = {0, 0};
 	auto attachmentExtent = VkExtent2D{m_GBufferFramebuffers[frameIndex]->Width(), m_GBufferFramebuffers[frameIndex]->Height()};
 	gBufferRenderPassInfo.renderArea.extent = attachmentExtent;
 
-	m_GBufferPipeline->Bind(gBufferCmd);
-	m_GBufferPass->BeginPass(gBufferCmd, gBufferRenderPassInfo, attachmentExtent);
+	m_GBufferPipeline->Bind(gBufferCmdBufferHandle);
+	m_GBufferPass->BeginPass(gBufferCmdBufferHandle, gBufferRenderPassInfo, attachmentExtent);
 	for (auto& [id, gameObject] : frameInfo.ActiveScene.GameObjects)
 	{
 		auto globalUbo = frameInfo.GlobalUbo.lock();
-		gameObject.Render(gBufferCmd, frameIndex, globalUbo->DescriptorInfo());
+		gameObject.Render(gBufferCmdBufferHandle, frameIndex, globalUbo->DescriptorInfo());
 	}
-	m_GBufferPass->EndPass(gBufferCmd);
+	m_GBufferPass->EndPass(gBufferCmdBufferHandle);
 
 	// Update internal host-side state to reflect the image transitions made during the render pass
 	for (size_t i = 0; i < m_GBufferTextures[frameIndex].size() - 1; ++i)
 		m_GBufferTextures[frameIndex][i]->UpdateState(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-	vkEndCommandBuffer(gBufferCmd);
+	m_GBufferCommandBuffers[frameIndex]->End();
 }
 
 void VulkanDeferredRenderer::RecordLightingPassCommandBuffer(FrameInfo& frameInfo)
 {
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
 	auto frameIndex = frameInfo.FrameIndex;
-	auto lightingCmd = m_LightingCommandBuffers[frameIndex];
 
-	vkBeginCommandBuffer(lightingCmd, &beginInfo);
+	auto lightingCmdBufferHandle = m_LightingCommandBuffers[frameIndex]->GetHandle();
+
+	m_LightingCommandBuffers[frameIndex]->Begin();
 	{
 		m_LightingTextures[frameIndex]->UpdateState(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 		VkRenderPassBeginInfo lightingRenderPassInfo{};
 		lightingRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		lightingRenderPassInfo.renderPass = m_LightingPass->RenderPass();
-		lightingRenderPassInfo.framebuffer = m_LightingFramebuffers[frameIndex]->Framebuffer();
+		lightingRenderPassInfo.renderPass = m_LightingPass->GetHandle();
+		lightingRenderPassInfo.framebuffer = m_LightingFramebuffers[frameIndex]->GetHandle();
 		lightingRenderPassInfo.renderArea.offset = {0, 0};
-		auto attachmentExtent =
-			VkExtent2D{m_LightingFramebuffers[frameIndex]->Width(), m_LightingFramebuffers[frameIndex]->Height()};
+		auto attachmentExtent = VkExtent2D{m_LightingFramebuffers[frameIndex]->Width(), m_LightingFramebuffers[frameIndex]->Height()};
 		lightingRenderPassInfo.renderArea.extent = attachmentExtent;
 
-		m_LightingPipeline->Bind(lightingCmd);
-		m_LightingPass->BeginPass(lightingCmd, lightingRenderPassInfo, attachmentExtent);
+		m_LightingPipeline->Bind(lightingCmdBufferHandle);
+		m_LightingPass->BeginPass(lightingCmdBufferHandle, lightingRenderPassInfo, attachmentExtent);
 		{
 			auto globalUbo = frameInfo.GlobalUbo.lock();
 			m_LightingMaterial->UpdateDescriptorSets(frameIndex,
@@ -746,54 +700,69 @@ void VulkanDeferredRenderer::RecordLightingPassCommandBuffer(FrameInfo& frameInf
 								.imageInfo = m_GBufferTextures[frameIndex][2]->GetBaseViewDescriptorInfo()}}}});
 			m_LightingMaterial->SetPushConstant<int>("DebugDisplayIndex", 0);
 
-			m_LightingMaterial->BindPushConstants(lightingCmd);
-			m_LightingMaterial->BindDescriptors(frameIndex, lightingCmd, VK_PIPELINE_BIND_POINT_GRAPHICS);
-			vkCmdDraw(lightingCmd, 3, 1, 0, 0);
+			m_LightingMaterial->BindPushConstants(lightingCmdBufferHandle);
+			m_LightingMaterial->BindDescriptors(frameIndex, lightingCmdBufferHandle, VK_PIPELINE_BIND_POINT_GRAPHICS);
+			vkCmdDraw(lightingCmdBufferHandle, 3, 1, 0, 0);
 		}
-		m_LightingPass->EndPass(lightingCmd);
+		m_LightingPass->EndPass(lightingCmdBufferHandle);
 		m_LightingTextures[frameIndex]->UpdateState(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
-	vkEndCommandBuffer(lightingCmd);
+	m_LightingCommandBuffers[frameIndex]->End();
 }
 
 void VulkanDeferredRenderer::RecordCompositionPassCommandBuffer(FrameInfo& frameInfo)
 {
+	auto cmdBuffer = frameInfo.SwapchainSubmitCommandBuffer.lock();
+	auto fbo = m_CompositionFramebuffers[frameInfo.ImageIndex]->GetHandle();
+
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-	vkBeginCommandBuffer(frameInfo.DrawCommandBuffer, &beginInfo);
+	cmdBuffer->Begin();
 
-	uint32_t swapchainImageIndex = m_Renderer->GetCurrentSwapchainImageIndex();
 	VkRenderPassBeginInfo compositionRenderPassInfo{};
 	compositionRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	compositionRenderPassInfo.renderPass = m_CompositionPass->RenderPass();
-	compositionRenderPassInfo.framebuffer = m_CompositionFramebuffers[swapchainImageIndex]->Framebuffer();
+	compositionRenderPassInfo.renderPass = m_CompositionPass->GetHandle();
+	compositionRenderPassInfo.framebuffer = fbo;
 
 	compositionRenderPassInfo.renderArea.offset = {0, 0};
 	compositionRenderPassInfo.renderArea.extent = m_Renderer->VulkanSwapchain().Extent();
 
-	m_CompositionPass->BeginPass(frameInfo.DrawCommandBuffer, compositionRenderPassInfo, m_Renderer->VulkanSwapchain().Extent());
-	m_CompositionPipeline->Bind(frameInfo.DrawCommandBuffer);
-	m_CompositionMaterial->UpdateDescriptorSets(
-		frameInfo.FrameIndex, {{0, {{.binding = 0,
-									   .type = DescriptorUpdate::Type::Image,
-									   .imageInfo = m_LightingTextures[frameInfo.FrameIndex]->GetBaseViewDescriptorInfo()}}}});
-	m_CompositionMaterial->BindDescriptors(frameInfo.FrameIndex, frameInfo.DrawCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS);
-	vkCmdDraw(frameInfo.DrawCommandBuffer, 3, 1, 0, 0);
-	m_CompositionPass->EndPass(frameInfo.DrawCommandBuffer);
+	m_CompositionPass->BeginPass(cmdBuffer->GetHandle(), compositionRenderPassInfo, m_Renderer->VulkanSwapchain().Extent());
+	{
+		m_CompositionPipeline->Bind(cmdBuffer->GetHandle());
+		m_CompositionMaterial->UpdateDescriptorSets(
+			frameInfo.FrameIndex,
+			{
+				{0,
+					{
+						{
+							.binding = 0,
+							.type = DescriptorUpdate::Type::Image,
+							.imageInfo = m_LightingTextures[frameInfo.FrameIndex]->GetBaseViewDescriptorInfo()}
+						}
+					}
+			});
+		m_CompositionMaterial->BindDescriptors(frameInfo.FrameIndex, cmdBuffer->GetHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS);
+		vkCmdDraw(cmdBuffer->GetHandle(), 3, 1, 0, 0);
+	}
+	m_CompositionPass->EndPass(cmdBuffer->GetHandle());
+	cmdBuffer->End();
+}
 
-	vkEndCommandBuffer(frameInfo.DrawCommandBuffer);
+void VulkanDeferredRenderer::OnEvent(Event& event)
+{
 }
 
 void VulkanDeferredRenderer::Render(FrameInfo& frameInfo)
 {
+	VulkanCommandBuffer::ResetCommandBuffers(m_GBufferCommandBuffers);
+	VulkanCommandBuffer::ResetCommandBuffers(m_LightingCommandBuffers);
+
 	RecordGBufferCommandBuffer(frameInfo);
 	RecordLightingPassCommandBuffer(frameInfo);
 	RecordCompositionPassCommandBuffer(frameInfo);
-
 	SubmitRenderPasses(frameInfo.FrameIndex);
-	frameInfo.WaitForGraphicsSubmit = m_LightingCompleteSemaphores[frameInfo.FrameIndex];
-	frameInfo.SignalForPresentation = m_CompositionRenderCompleteSemaphores[frameInfo.FrameIndex];
 }
 
 void VulkanDeferredRenderer::Resize(uint32_t width, uint32_t height)
@@ -810,3 +779,4 @@ void VulkanDeferredRenderer::Resize(uint32_t width, uint32_t height)
 	InvalidateLightingPass();
 	InvalidateCompositionPass();
 }
+
