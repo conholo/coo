@@ -1,7 +1,6 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_semaphore.h>
 
 #include <memory>
 #include <string>
@@ -16,6 +15,12 @@ class VulkanImageView;
 class VulkanFramebuffer;
 class VulkanRenderPass;
 class VulkanGraphicsPipeline;
+class VulkanShader;
+class VulkanMaterial;
+class VulkanMaterialLayout;
+class VulkanCommandBuffer;
+class VulkanFence;
+class VulkanSemaphore;
 
 template <typename T>
 class ResourceHandle
@@ -47,7 +52,8 @@ public:
 		Buffer,
 		Sampler,
 		ImageView,
-		DescriptorSet,
+		Fence,
+		Semaphore,
 		RenderPass,
 		Framebuffer,
 		GraphicsPipeline,
@@ -153,11 +159,28 @@ private:
 	std::shared_ptr<VulkanMaterial> m_Material;
 };
 
+class FenceResource : public RenderPassResource
+{
+public:
+	FenceResource(const std::string& name, std::shared_ptr<VulkanFence> fence)
+		: RenderPassResource(name, Type::Fence), m_Fence(std::move(fence))
+	{
+	}
+
+	std::shared_ptr<VulkanFence> Get() const
+	{
+		return m_Fence;
+	}
+
+private:
+	std::shared_ptr<VulkanFence> m_Fence;
+};
+
 class SemaphoreResource : public RenderPassResource
 {
 public:
 	SemaphoreResource(const std::string& name, std::shared_ptr<VulkanSemaphore> semaphore)
-		: RenderPassResource(name, Type::Texture), m_Semaphore(std::move(semaphore))
+		: RenderPassResource(name, Type::Semaphore), m_Semaphore(std::move(semaphore))
 	{
 	}
 
@@ -174,7 +197,7 @@ class CommandBufferResource : public RenderPassResource
 {
 public:
 	CommandBufferResource(const std::string& name, std::shared_ptr<VulkanCommandBuffer> cmdBuffer)
-		: RenderPassResource(name, Type::Texture), m_CommandBuffer(std::move(cmdBuffer))
+		: RenderPassResource(name, Type::CommandBuffer), m_CommandBuffer(std::move(cmdBuffer))
 	{
 	}
 
@@ -236,23 +259,6 @@ public:
 
 private:
 	std::shared_ptr<VulkanImageView> m_ImageView;
-};
-
-class DescriptorSetResource : public RenderPassResource
-{
-public:
-	DescriptorSetResource(const std::string& name, VkDescriptorSet descriptorSet)
-		: RenderPassResource(name, Type::DescriptorSet), m_DescriptorSet(descriptorSet)
-	{
-	}
-
-	VkDescriptorSet GetDescriptorSet() const
-	{
-		return m_DescriptorSet;
-	}
-
-private:
-	VkDescriptorSet m_DescriptorSet;
 };
 
 class RenderPassObjectResource : public RenderPassResource

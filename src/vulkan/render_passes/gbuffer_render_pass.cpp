@@ -152,7 +152,7 @@ void GBufferPass::CreateTextures(RenderGraph& graph)
 	auto createPositionTexture =
 		[&floatingPointAttachmentSpec](size_t index, const std::string& resourceBaseName)
 	{
-		floatingPointAttachmentSpec.DebugName = "G-Buffer Position " + std::to_string(index);
+		floatingPointAttachmentSpec.DebugName = resourceBaseName + " " + std::to_string(index);
 		auto texture = std::make_shared<VulkanTexture2D>(floatingPointAttachmentSpec);
 		return std::make_shared<TextureResource>(floatingPointAttachmentSpec.DebugName, texture);
 	};
@@ -160,7 +160,7 @@ void GBufferPass::CreateTextures(RenderGraph& graph)
 	auto createNormalTexture =
 		[&floatingPointAttachmentSpec](size_t index, const std::string& resourceBaseName)
 	{
-		floatingPointAttachmentSpec.DebugName = "G-Buffer Normal " + std::to_string(index);
+		floatingPointAttachmentSpec.DebugName = resourceBaseName + " " + std::to_string(index);
 		auto texture = std::make_shared<VulkanTexture2D>(floatingPointAttachmentSpec);
 		return std::make_shared<TextureResource>(floatingPointAttachmentSpec.DebugName, texture);
 	};
@@ -178,7 +178,7 @@ void GBufferPass::CreateTextures(RenderGraph& graph)
 	auto createAlbedoTexture =
 		[&byteAttachmentSpec](size_t index, const std::string& resourceBaseName)
 	{
-		byteAttachmentSpec.DebugName = "G-Buffer Albedo " + std::to_string(index);
+		byteAttachmentSpec.DebugName = resourceBaseName + " " + std::to_string(index);
 		auto texture = std::make_shared<VulkanTexture2D>(byteAttachmentSpec);
 		return std::make_shared<TextureResource>(byteAttachmentSpec.DebugName, texture);
 	};
@@ -347,7 +347,7 @@ void GBufferPass::CreateGraphicsPipeline(RenderGraph& graph)
 			VulkanShader* vertexShader,
 			VulkanShader* fragmentShader)
 	{
-		auto builder = VulkanGraphicsPipelineBuilder("G-Buffer Pipeline")
+		auto builder = VulkanGraphicsPipelineBuilder(resourceBaseName)
 						   .SetShaders(*vertexShader, *fragmentShader)
 						   .SetVertexInputDescription({VulkanModel::Vertex::GetBindingDescriptions(), VulkanModel::Vertex::GetAttributeDescriptions()})
 						   .SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
@@ -404,12 +404,10 @@ void GBufferPass::CreateFramebuffers(RenderGraph& graph)
 		return std::make_shared<FramebufferResource>(resourceBaseName, framebuffer);
 	};
 
-	uint32_t imageCount = swapchain.ImageCount();
-
 	auto renderPassResource = graph.GetResource(m_RenderPassHandle);
 
 	m_FramebufferHandles = graph.CreateResources<FramebufferResource>(
-		imageCount,
+		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
 		"G-Buffer Framebuffer",
 		createFramebuffer,
 		renderPassResource->Get().get(),

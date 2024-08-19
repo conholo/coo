@@ -3,6 +3,9 @@
 #include "core/frame_info.h"
 #include "vulkan_context.h"
 #include "vulkan_utils.h"
+#include "vulkan_fence.h"
+
+#include <vulkan/render_passes/render_graph.h>
 
 #include <utility>
 
@@ -143,17 +146,26 @@ void VulkanSwapchain::CreateSwapchain()
 	}
 }
 
-VkResult VulkanSwapchain::AcquireNextImage(uint32_t frameIndex, uint32_t* imageIndex)
+VkResult VulkanSwapchain::AcquireNextImage(RenderGraph& graph, uint32_t frameIndex, uint32_t* imageIndex)
 {
-	vkWaitForFences(VulkanContext::Get().Device(), 1, &m_InFlightFences[frameIndex], VK_TRUE, std::numeric_limits<uint64_t>::max());
+	auto* imageAvailableSemaphoreResource = graph.GetResource<SemaphoreResource>("Rendering Complete Semaphore", frameIndex);
+	auto* frameResourcesAvailableFenceResource = graph.GetResource<FenceResource>("Frame Resources Available Fence", frameIndex);
 
-	VkResult result = vkAcquireNextImageKHR(VulkanContext::Get().Device(), m_Swapchain, std::numeric_limits<uint64_t>::max(),
-		m_ImageAvailableSemaphores[frameIndex], VK_NULL_HANDLE, imageIndex);
+	std::vector<VkFence> resourcesAvailableFence = { frameResourcesAvailableFenceResource->Get()->GetHandle() };
+	vkWaitForFences(VulkanContext::Get().Device(), 1, resourcesAvailableFence.data(), VK_TRUE, std::numeric_limits<uint64_t>::max());
+
+	VkResult result = vkAcquireNextImageKHR(
+		VulkanContext::Get().Device(),
+		m_Swapchain,
+		std::numeric_limits<uint64_t>::max(),
+		imageAvailableSemaphoreResource->Get()->GetHandle(),
+		VK_NULL_HANDLE,
+		imageIndex);
 
 	return result;
 }
 
-void VulkanSwapchain::SubmitCommandBuffer(FrameInfo& frameInfo)
+void VulkanSwapchain::SubmitCommandBuffer(RenderGraph& renderGraph, FrameInfo& frameInfo)
 {
 	/*
 	 *  Before submitting the composition/display command buffer, wait on the pass before this using the semaphore.
@@ -162,6 +174,8 @@ void VulkanSwapchain::SubmitCommandBuffer(FrameInfo& frameInfo)
 	 * 	renderer is *usually* the only wait condition needed for displaying the image. For the case of a more involved multi-pass
 	 * 	renderer, the wait condition for the swapchain command buffer submission will be the previous pass in the chain of passes.
 	 */
+
+	if(renderGraph.GetResource())
 
 	// Submit Composition pass
 	std::vector<VkSemaphore> waitSemaphores = { frameInfo.RendererCompleteSemaphore };

@@ -2,10 +2,13 @@
 
 #include "vulkan_image.h"
 
+#include <vulkan/render_passes/render_pass.h>
+
 #include <memory>
 #include <vector>
 
 class FrameInfo;
+class RenderGraph;
 class VulkanSwapchain
 {
 public:
@@ -19,8 +22,8 @@ public:
 
     ~VulkanSwapchain();
 
-    VkResult AcquireNextImage(uint32_t frameIndex, uint32_t* imageIndex);
-	void SubmitCommandBuffer(FrameInfo& frameInfo);
+    VkResult AcquireNextImage(RenderGraph& graph, uint32_t frameIndex, uint32_t* imageIndex);
+	void SubmitCommandBuffer(RenderGraph& renderGraph, FrameInfo& frameInfo);
 	VkResult Present(FrameInfo& frameInfo, const uint32_t* imageIndex);
 
     VkSwapchainKHR Swapchain() const { return m_Swapchain; }
@@ -46,10 +49,9 @@ private:
 	void CreateSwapchain();
 	void CreateSyncObjects();
 
-	std::vector<VkFence> m_InFlightFences;
-	std::vector<VkFence> m_ImagesInFlight;
-	std::vector<VkSemaphore> m_ImageAvailableSemaphores;
-	std::vector<VkSemaphore> m_RenderCompleteSemaphores;
+	std::vector<std::optional<ResourceHandle<VulkanFence>>> m_ResourcesInFlight;
+	std::vector<std::optional<ResourceHandle<VulkanFence>>> m_ImagesInFlight;
+	std::vector<std::optional<ResourceHandle<VulkanSemaphore>>> m_ImageAvailableSemaphoreHandles;
 
     VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;
     std::shared_ptr<VulkanSwapchain> m_PreviousSwapchain;

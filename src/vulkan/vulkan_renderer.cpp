@@ -1,5 +1,3 @@
-#include <vulkan/render_passes/swapchain_render_pass.h>
-
 #include "vulkan_renderer.h"
 
 #include "core/frame_info.h"
@@ -8,10 +6,13 @@
 #include "ui/imgui_vulkan_dock_space.h"
 #include "vulkan_deferred_renderer.h"
 #include "vulkan_utils.h"
+#include "vulkan/render_passes/lighting_render_pass.h"
+#include "vulkan/render_passes/render_graph.h"
+#include "render_passes/scene_composition_pass.h"
 
 #include <core/application.h>
+#include <core/platform_path.h>
 #include <imgui.h>
-#include <vulkan/render_passes/render_graph.h>
 
 VulkanRenderer::VulkanRenderer(Window& window) : m_WindowRef(window)
 {
@@ -47,19 +48,36 @@ void VulkanRenderer::Initialize()
 		uboBuffer->Map();
 	}
 
-	m_SceneRenderer->Initialize();
-	m_ImGuiRenderer->Initialize(m_SceneRenderer->GetRenderFinishedRenderPass());
-
-	auto swapchainPass = std::unique_ptr<SwapchainPass>();
-
 	RenderGraph graph;
-	auto gBufferPass = std::make_unique<GBufferPass>();
 
-	/*
-	 * 	Render Graph Loop
-	 *  1. Get next
-	 *  2.
-	 */
+	// Create Global Resources
+	auto createGlobalUbos =
+		[](size_t index, const std::string& resourceBaseName)
+	{
+		auto resourceName = resourceBaseName + " " + std::to_string(index);
+		std::shared_ptr<VulkanBuffer> uboBuffer = std::make_shared<VulkanBuffer>(
+			sizeof(GlobalUbo),
+			1,
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+		return std::make_shared<BufferResource>(resourceName, uboBuffer);
+	};
+	graph.CreateResources<BufferResource>(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, "Global Uniform Buffer", createGlobalUbos);
+
+	auto createShader =
+		[](const std::string& resourceBaseName, const std::string& filePath, ShaderType shaderType)
+	{
+		auto shader = std::make_shared<VulkanShader>(filePath, shaderType);
+		return std::make_shared<ShaderResource>(resourceBaseName, shader);
+	};
+	auto shaderDirectory = FileSystemUtil::GetShaderDirectory();
+	auto fsqVertPath = FileSystemUtil::PathToString(shaderDirectory / "fsq.vert");
+	graph.CreateResource<ShaderResource>("Full Screen Quad Vertex Shader", createShader, fsqVertPath, ShaderType::Vertex);
+
+	graph.AddPass<GBufferPass>();
+	graph.AddPass<LightingPass>();
+	graph.AddPass<SceneCompositionPass>();
 }
 
 void VulkanRenderer::OnEvent(Event& event)
@@ -94,31 +112,6 @@ void VulkanRenderer::Render(FrameInfo& frameInfo)
 		sharedBuffer->Flush();
 		frameInfo.SwapchainSubmitCommandBuffer = cmd;
 		frameInfo.ImageIndex = m_SwapchainRenderer->m_CurrentImageIndex;
-		frameInfo.RendererCompleteSemaphore = m_SceneRenderer->GetRendererFinishedSemaphore(frameInfo.FrameIndex);
-
-		// Submit the scene rendering commands.
-		m_SceneRenderer->Render(frameInfo);
-		m_ImGuiRenderer->Begin();
-		{
-			ImGuiVulkanDockSpace::Begin();
-
-			ImGui::Begin("Deferred Renderer Debug");
-			{
-				ImGui::Text("Frame Index: %d", frameInfo.FrameIndex);
-				ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-				if (ImGui::Button("Toggle Wireframe"))
-				{
-				}
-			}
-			ImGui::End();
-
-			// m_ImGuiRenderer->BlockEvents(m_ImGuiViewport->ShouldBlockEvents());
-
-			ImGuiVulkanDockSpace::End();
-		}
-
-		m_ImGuiRenderer->RecordImGuiPass(frameInfo);
-		m_ImGuiRenderer->End();
 	}
 
 	// Submit the swapchain draw commands and present.

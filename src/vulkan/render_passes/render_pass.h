@@ -4,6 +4,7 @@
 
 #include <vector>
 
+class FrameInfo;
 class RenderGraph;
 
 class RenderPass

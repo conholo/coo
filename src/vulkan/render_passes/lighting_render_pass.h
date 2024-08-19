@@ -1,12 +1,11 @@
 #pragma once
 
-#include "render_pass.h"
 #include "vulkan/irenderer.h"
+#include "render_pass.h"
 
-class GBufferPass : public RenderPass
+class LightingPass : public RenderPass
 {
 public:
-	GBufferPass() = default;
 	void CreateResources(RenderGraph& graph) override;
 	void Record(const FrameInfo& frameInfo, RenderGraph& graph) override;
 	void Submit(const FrameInfo& frameInfo, RenderGraph& graph) override;
@@ -28,17 +27,12 @@ private:
 	std::vector<ResourceHandle<CommandBufferResource>> m_CommandBufferHandles;
 	std::vector<ResourceHandle<SemaphoreResource>> m_RenderCompleteSemaphoreHandles;
 
-	std::vector<ResourceHandle<TextureResource>> m_PositionTextureHandles;
-	std::vector<ResourceHandle<TextureResource>> m_NormalTextureHandles;
-	std::vector<ResourceHandle<TextureResource>> m_AlbedoTextureHandles;
-	std::vector<ResourceHandle<TextureResource>> m_DepthTextureHandles;
-
+	std::vector<ResourceHandle<TextureResource>> m_ColorAttachmentHandles;
 	std::vector<ResourceHandle<FramebufferResource>> m_FramebufferHandles;
 
 	ResourceHandle<GraphicsPipelineObjectResource> m_PipelineHandle{};
 	ResourceHandle<RenderPassObjectResource> m_RenderPassHandle;
 	ResourceHandle<MaterialLayoutResource> m_MaterialLayoutHandle;
 	ResourceHandle<MaterialResource> m_MaterialHandle;
-	ResourceHandle<ShaderResource> m_VertexHandle;
 	ResourceHandle<ShaderResource> m_FragmentHandle;
 };

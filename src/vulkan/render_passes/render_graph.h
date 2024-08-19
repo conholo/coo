@@ -100,12 +100,21 @@ public:
 		return ptr;
 	}
 
+	template <typename T>
+	T* AddPass()
+	{
+		auto pass = std::make_unique<T>();
+		T* ptr = pass.get();
+		m_Passes.push_back(std::move(pass));
+		return ptr;
+	}
+
 	template <typename T, typename... Args>
 	T* AddPass(Args&&... args)
 	{
 		return AddPass<T>([&]() { return std::make_unique<T>(std::forward<Args>(args)...); });
 	}
-
+	
 	void Initialize()
 	{
 		for (auto& pass : m_Passes)
