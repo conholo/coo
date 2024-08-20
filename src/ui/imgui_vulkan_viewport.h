@@ -9,7 +9,8 @@ class VulkanImGuiViewport
 {
 public:
 	VulkanImGuiViewport() = default;
-	void Draw(VulkanImage2D& displayImage);
+	void Initialize();
+	void Draw(RenderGraph& graph, FrameInfo& frameInfo);
 	bool ShouldBlockEvents() const { return !m_ViewportFocused && !m_ViewportHovered; }
 
 private:
@@ -20,4 +21,8 @@ private:
 	glm::vec2		 m_ViewportBoundsMax{ 0.0f };
 	bool			 m_ViewportFocused = false;
 	bool			 m_ViewportHovered = false;
+
+	std::vector<VkDescriptorSet> m_DescriptorSets;
+	std::unique_ptr<VulkanDescriptorPool> m_DescriptorPool;
+	std::unique_ptr<VulkanDescriptorSetLayout> m_SetLayout;
 };

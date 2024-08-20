@@ -81,6 +81,9 @@ void SwapchainPass::Submit(const FrameInfo& frameInfo, RenderGraph& graph)
 		waitStages,
 		signalSemaphores,
 		resourceFence->Get()->GetHandle());
+
+	auto swapchainImage = graph.GetResource<Image2DResource>(SwapchainImage2DResourceName, frameInfo.ImageIndex)->Get();
+	swapchainImage->SetExpectedLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 }
 
 void SwapchainPass::CreateCommandBuffers(RenderGraph& graph)
@@ -168,7 +171,18 @@ void SwapchainPass::CreateRenderPass(RenderGraph& graph)
 				.StoreOp = VK_ATTACHMENT_STORE_OP_STORE,
 				.InitialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 				.FinalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-				.ClearValue = {.color = {0.0f, 0.0f, 0.0f, 1.0f}}
+				.ClearValue = {.color = {0.0f, 0.0f, 0.0f, 1.0f}},
+				.BlendAttachmentState =
+					{
+						.blendEnable = VK_TRUE,
+						.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+						.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+						.colorBlendOp = VK_BLEND_OP_ADD,
+						.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+						.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+						.alphaBlendOp = VK_BLEND_OP_ADD,
+						.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+					}
 			});
 
 		// Set up sceneCompositionSubpass

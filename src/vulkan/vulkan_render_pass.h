@@ -28,6 +28,7 @@ struct AttachmentDescription
     VkImageLayout InitialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     VkImageLayout FinalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     VkClearValue ClearValue{};
+	VkPipelineColorBlendAttachmentState BlendAttachmentState{};
 };
 
 struct SubpassDescription

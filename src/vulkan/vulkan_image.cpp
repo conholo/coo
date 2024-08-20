@@ -126,7 +126,6 @@ void VulkanImage2D::CreateImage()
                              : VK_IMAGE_TILING_OPTIMAL;
 
     imageCreateInfo.usage = usage;
-
     SetupImageSharingMode(imageCreateInfo);
     CreateVkImageWithInfo(imageCreateInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_Image, m_DeviceMemory);
     SetDebugUtilsObjectName(VulkanContext::Get().Device(), VK_OBJECT_TYPE_IMAGE, (uint64_t)m_Image, m_Specification.DebugName.c_str());
@@ -194,11 +193,12 @@ void VulkanImage2D::CreateSampler()
 {
 	VulkanSamplerBuilder builder;
 
-	builder.SetAnisotropy(16.0f)
+	builder.SetAnisotropy(m_Specification.SamplerSpec.Anisotropy)
 		.SetForIntegerFormat(ImageUtils::IsIntegerBased(m_Specification.Format))
 		.SetFilter(m_Specification.SamplerSpec.MinFilter, m_Specification.SamplerSpec.MagFilter)
 		.SetMipmapMode(m_Specification.SamplerSpec.MipMapMode)
-		.SetAddressMode(m_Specification.SamplerSpec.AddressModeU, m_Specification.SamplerSpec.AddressModeV, m_Specification.SamplerSpec.AddressModeW);
+		.SetAddressMode(m_Specification.SamplerSpec.AddressModeU, m_Specification.SamplerSpec.AddressModeV, m_Specification.SamplerSpec.AddressModeW)
+		.SetBorderColor(m_Specification.SamplerSpec.BorderColor);
 
 	m_Sampler = builder.Build();
 }

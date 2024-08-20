@@ -1,11 +1,40 @@
 #include "imgui_vulkan_viewport.h"
+
 #include "vulkan/vulkan_image.h"
+
 #include <imgui.h>
+#include <imgui_impl_vulkan.h>
 #include <vulkan/vulkan.h>
 
-
-void VulkanImGuiViewport::Draw(VulkanImage2D& displayImage)
+void VulkanImGuiViewport::Initialize()
 {
+	VulkanDescriptorPool::Builder poolBuilder;
+	poolBuilder
+		.AddPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VulkanSwapchain::MAX_FRAMES_IN_FLIGHT)
+		.SetMaxSets(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
+	m_DescriptorPool = poolBuilder.Build();
+
+	m_DescriptorSets.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
+
+	VulkanDescriptorSetLayout::Builder builder;
+	builder.AddDescriptor(
+		0,
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		1);
+	m_SetLayout = builder.Build();
+
+	for(int i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; ++i)
+	{
+		VulkanDescriptorWriter(*m_SetLayout, *m_DescriptorPool)
+			.Build(m_DescriptorSets[i]);
+	}
+}
+
+void VulkanImGuiViewport::Draw(RenderGraph& graph, FrameInfo& frameInfo)
+{
+	auto& displayImage = *graph.GetResource<Image2DResource>(SwapchainImage2DResourceName, frameInfo.ImageIndex)->Get();
+
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
 	ImGui::Begin("Viewport");
 	CalculateViewportSize(displayImage);
@@ -23,17 +52,21 @@ void VulkanImGuiViewport::Draw(VulkanImage2D& displayImage)
 
 	ImGui::SetCursorPos(cursorPos);
 
-	auto& swapchain = Application::Get().GetRenderer().VulkanSwapchain();
-	const auto textureID = ImGui_ImplVulkan_AddTexture(
-		displayImage.GetSampler(),
-		displayImage.GetView()->GetImageView(),
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	displayImage.TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	m_DescriptorPool->ResetPool();
+	VulkanDescriptorWriter(*m_SetLayout, *m_DescriptorPool)
+		.WriteImage(0, displayImage.GetDescriptorInfo())
+		.Build(m_DescriptorSets[frameInfo.FrameIndex]);
+
+	const auto textureID = m_DescriptorSets[frameInfo.FrameIndex];
 
 	ImGui::Image(
 		textureID,
 		ImVec2{ m_ViewportSize.x, m_ViewportSize.y },
 		ImVec2{ 0, 1 }, ImVec2{ 1, 0 }
  	);
+	displayImage.TransitionLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 	ImGui::End();
 	ImGui::PopStyleVar();

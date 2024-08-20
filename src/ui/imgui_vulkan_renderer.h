@@ -20,10 +20,9 @@ public:
 
 	void Initialize(RenderGraph& graph);
 	void Shutdown(RenderGraph& graph);
-	void Update(RenderGraph& graph, uint32_t frameIndex);
 
 	void Begin();
-	void End();
+	void End(RenderGraph& graph, uint32_t frameIndex);
 
 	void OnEvent(Event& e) const;
 	void BlockEvents(bool block) { m_BlockEvents = block; }
@@ -42,8 +41,8 @@ private:
 	std::unique_ptr<Buffer> m_FontMemoryBuffer;
 	std::vector<ResourceHandle<BufferResource>> m_VertexBufferHandles;
 	std::vector<ResourceHandle<BufferResource>> m_IndexBufferHandles;
-	size_t m_VertexCount;
-	size_t m_IndexCount;
+	size_t m_VertexCount{};
+	size_t m_IndexCount{};
 
 	bool m_BlockEvents = true;
 };

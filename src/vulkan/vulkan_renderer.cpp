@@ -12,6 +12,7 @@
 #include "vulkan_utils.h"
 
 #include <imgui.h>
+#include <ui/imgui_vulkan_dock_space.h>
 
 VulkanRenderer::VulkanRenderer(Window& window) : m_WindowRef(window)
 {
@@ -35,6 +36,7 @@ void VulkanRenderer::Initialize()
 	m_ImGuiRenderer = std::make_shared<VulkanImGuiRenderer>();
 	m_ImGuiRenderer->Initialize(m_Graph);
 	m_ImGuiViewport = std::make_unique<VulkanImGuiViewport>();
+	m_ImGuiViewport->Initialize();
 
 	// Create Global Resources
 	auto createGlobalUbos =
@@ -92,8 +94,18 @@ void VulkanRenderer::Render(FrameInfo& frameInfo)
 		frameInfo.ImageIndex = m_SwapchainRenderer->m_CurrentImageIndex;
 
 		m_ImGuiRenderer->Begin();
-		m_ImGuiRenderer->Update(m_Graph, frameInfo.FrameIndex);
-		m_ImGuiRenderer->End();
+		{
+			ImGuiVulkanDockSpace::Begin();
+			m_ImGuiViewport->Draw(m_Graph, frameInfo);
+
+			ImGui::Begin("Test");
+			ImGui::Text("Hello");
+			ImGui::End();
+			ImGui::ShowDemoWindow();
+
+			ImGuiVulkanDockSpace::End();
+		}
+		m_ImGuiRenderer->End(m_Graph, frameInfo.FrameIndex);
 
 		m_Graph.Execute(frameInfo);
 	}

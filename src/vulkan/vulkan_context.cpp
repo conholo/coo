@@ -1,6 +1,7 @@
 #include "vulkan_context.h"
 #include "vulkan_utils.h"
 #include <iostream>
+#include <limits>
 
 void VulkanContext::Initialize(const char *applicationName, uint32_t applicationVersion, Window *windowPtr)
 {
@@ -207,9 +208,15 @@ void VulkanContext::EndSingleTimeCommand(VkCommandBuffer commandBuffer, QueueFam
         }
     }
 
-    vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(queue);
+	VkFenceCreateInfo fenceCreateInfo {};
+	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	VkFence fence;
+	VK_CHECK_RESULT(vkCreateFence(m_LogicalDevice.Device, &fenceCreateInfo, nullptr, &fence));
 
+    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
+	// Wait for the fence to signal that command buffer has finished executing
+	VK_CHECK_RESULT(vkWaitForFences(m_LogicalDevice.Device, 1, &fence, VK_TRUE, std::numeric_limits<int>::max()));
+	vkDestroyFence(m_LogicalDevice.Device, fence, nullptr);
     vkFreeCommandBuffers(m_LogicalDevice.Device, pool, 1, &commandBuffer);
 }
 

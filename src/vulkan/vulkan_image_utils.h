@@ -5,10 +5,14 @@
 
 struct SamplerSpecification
 {
+	float Anisotropy = 16.0f;
 	VkFilter MinFilter = VK_FILTER_LINEAR;
 	VkFilter MagFilter = VK_FILTER_LINEAR;
 	VkSamplerMipmapMode MipMapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	VkSamplerAddressMode AddressModeU, AddressModeV, AddressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	VkSamplerAddressMode AddressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	VkSamplerAddressMode AddressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	VkSamplerAddressMode AddressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	VkBorderColor BorderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
 };
 
 enum class ImageFormat

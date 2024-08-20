@@ -4,9 +4,9 @@
 #include "core/window.h"
 #include "vulkan/render_passes/render_pass_resource.h"
 #include "vulkan/render_passes/render_graph_resource_declarations.h"
+#include "core/platform_path.h"
 
 #include <GLFW/glfw3.h>
-#include <backends/imgui_impl_vulkan.h>
 #include <core/application.h>
 #include <imgui.h>
 #include <memory>
@@ -14,12 +14,27 @@
 void VulkanImGuiRenderer::Initialize(RenderGraph& graph)
 {
 	auto& swapchain = Application::Get().GetRenderer().VulkanSwapchain();
+	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	SetDarkThemeColors();
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.DisplaySize = ImVec2(static_cast<float>(swapchain.Width()), static_cast<float>(swapchain.Height()));
 	io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking
+	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows
+	ImGuiStyle& style = ImGui::GetStyle();
+	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		style.WindowRounding = 0.0f;
+		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+	}
+	const std::string pathToFont = FileSystemUtil::PathToString(FileSystemUtil::GetFontDirectory() / "Cascadia.ttf");
+	io.Fonts->AddFontFromFileTTF(pathToFont.c_str(), 13.0f);
+	io.FontDefault = io.Fonts->AddFontFromFileTTF(pathToFont.c_str(), 13.0f);
+
+	style.Colors[ImGuiCol_WindowBg] = ImVec4(0.15f, 0.15f, 0.15f, style.Colors[ImGuiCol_WindowBg].w);
 
 	// Create font texture
 	unsigned char* fontData;
@@ -36,10 +51,14 @@ void VulkanImGuiRenderer::Initialize(RenderGraph& graph)
 			.Usage = TextureUsage::Texture,
 			.Width = static_cast<uint32_t>(texWidth),
 			.Height = static_cast<uint32_t>(texHeight),
-			.GenerateMips = true,
+			.GenerateMips = false,
 			.UsedInTransferOps = true,
 			.CreateSampler = true,
-			.DebugName = resourceName,
+			.SamplerSpec
+				{
+					.Anisotropy = 1.0f
+				},
+			.DebugName = resourceName
 		};
 
 		auto texture = VulkanTexture2D::CreateFromMemory(specification,  *m_FontMemoryBuffer);
@@ -76,20 +95,24 @@ void VulkanImGuiRenderer::Begin()
 }
 
 // Update vertex and index buffer containing the imGui elements when required
-void VulkanImGuiRenderer::Update(RenderGraph& graph, uint32_t frameIndex)
+void VulkanImGuiRenderer::End(RenderGraph& graph, uint32_t frameIndex)
 {
-	ImGui::Begin("Test");
-	ImGui::Text("Hello");
-	ImGui::End();
-
-	//ImGui::ShowDemoWindow();
 	ImGui::Render();
 	ImDrawData* imDrawData = ImGui::GetDrawData();
 	VkDeviceSize vertexBufferSize = imDrawData->TotalVtxCount * sizeof(ImDrawVert);
 	VkDeviceSize indexBufferSize = imDrawData->TotalIdxCount * sizeof(ImDrawIdx);
 
 	if (vertexBufferSize == 0 || indexBufferSize == 0)
+	{
+		ImGuiIO& io = ImGui::GetIO(); (void)io;
+		// Update and Render additional Platform Windows
+		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+		{
+			ImGui::UpdatePlatformWindows();
+			ImGui::RenderPlatformWindowsDefault();
+		}
 		return;
+	}
 
 	ResourceHandle<BufferResource> vboHandle = m_VertexBufferHandles[frameIndex];
 	auto* vboResource = graph.GetResource<BufferResource>(vboHandle);
@@ -141,10 +164,7 @@ void VulkanImGuiRenderer::Update(RenderGraph& graph, uint32_t frameIndex)
 	// Flush to make writes visible to GPU
 	vbo->Flush();
 	ebo->Flush();
-}
 
-void VulkanImGuiRenderer::End()
-{
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	// Update and Render additional Platform Windows
 	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
@@ -208,4 +228,5 @@ void VulkanImGuiRenderer::Shutdown(RenderGraph& graph)
 
 	graph.TryFreeResources<BufferResource>(UIVertexBufferResourceName, freeBuffer);
 	graph.TryFreeResources<BufferResource>(UIIndexBufferResourceName, freeBuffer);
+	ImGui::DestroyContext();
 }

@@ -348,12 +348,7 @@ VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetRenderPass(Vulk
     for (const auto& attachment : attachments)
     {
         if (attachment.Type == AttachmentType::Color)
-        {
-            VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
-            colorBlendAttachment.blendEnable = VK_FALSE;
-            colorBlendAttachment.colorWriteMask = 0xf;
-            m_ColorBlendAttachmentStates.push_back(colorBlendAttachment);
-        }
+			m_ColorBlendAttachmentStates.push_back(attachment.BlendAttachmentState);
     }
 
     m_ColorBlendState.attachmentCount = static_cast<uint32_t>(m_ColorBlendAttachmentStates.size());
