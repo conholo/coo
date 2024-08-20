@@ -56,6 +56,7 @@ public:
 
     void BeginPass(VkCommandBuffer commandBuffer, VkRenderPassBeginInfo beginInfo, VkExtent2D extent);
     void EndPass(VkCommandBuffer commandBuffer);
+	void NextSubpass(VkCommandBuffer commandBuffer, VkSubpassContents contents);
 
     VkRenderPass GetHandle() const { return m_RenderPass; }
     uint32_t ColorAttachmentCount();

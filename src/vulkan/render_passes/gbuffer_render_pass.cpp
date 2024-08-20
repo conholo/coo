@@ -1,11 +1,11 @@
 #include "gbuffer_render_pass.h"
 
 #include "render_graph.h"
+#include "render_graph_resource_declarations.h"
+#include "vulkan/vulkan_semaphore.h"
+#include "vulkan/vulkan_fence.h"
 
-#include <vulkan/vulkan_utils.h>
-
-#include <utility>
-
+#include <core/platform_path.h>
 
 void GBufferPass::CreateResources(RenderGraph& graph)
 {
@@ -42,8 +42,10 @@ void GBufferPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 
 	auto* renderPassResource = graph.GetResource<RenderPassObjectResource>(m_RenderPassHandle);
 	auto* graphicsPipelineResource = graph.GetResource<GraphicsPipelineObjectResource>(m_PipelineHandle);
+	auto* fenceResource = graph.GetResource<FenceResource>(m_ResourcesInFlightFenceHandles[frameInfo.FrameIndex]);
 
 	auto cmd = cmdBufferResource->Get();
+	cmd->WaitForCompletion(fenceResource->Get()->GetHandle());
 	auto fbo = fboResource->Get();
 	auto renderPass = renderPassResource->Get();
 	auto pipeline = graphicsPipelineResource->Get();
@@ -63,8 +65,8 @@ void GBufferPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 			pipeline->Bind(cmd->GetHandle());
 			for (auto& [id, gameObject] : frameInfo.ActiveScene.GameObjects)
 			{
-				auto globalUbo = frameInfo.GlobalUbo.lock();
-				gameObject.Render(cmd->GetHandle(), frameInfo.FrameIndex, globalUbo->DescriptorInfo());
+				auto globalUboResource = graph.GetResource<BufferResource>(GlobalUniformBufferResourceName);
+				gameObject.Render(cmd->GetHandle(), frameInfo.FrameIndex, globalUboResource->Get()->DescriptorInfo());
 			}
 		}
 		renderPass->EndPass(cmd->GetHandle());
@@ -79,9 +81,10 @@ void GBufferPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 
 void GBufferPass::Submit(const FrameInfo& frameInfo, RenderGraph& graph)
 {
-	auto waitSemaphoreResource = graph.GetResource<SemaphoreResource>("Swapchain Image Available Semaphore", frameInfo.FrameIndex);
+	auto waitSemaphoreResource = graph.GetResource<SemaphoreResource>(SwapchainImageAvailableSemaphoreResourceName, frameInfo.FrameIndex);
 	auto signalSemaphoreResource = graph.GetResource(m_RenderCompleteSemaphoreHandles[frameInfo.FrameIndex]);
 	auto cmdBufferResource = graph.GetResource(m_CommandBufferHandles[frameInfo.FrameIndex]);
+	auto fenceResource = graph.GetResource(m_ResourcesInFlightFenceHandles[frameInfo.FrameIndex]);
 
 	std::vector<VkSemaphore> waitSemaphores = {waitSemaphoreResource->Get()->GetHandle() };
 	std::vector<VkPipelineStageFlags> waitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
@@ -93,7 +96,8 @@ void GBufferPass::Submit(const FrameInfo& frameInfo, RenderGraph& graph)
 		cmdBuffers,
 		waitSemaphores,
 		waitStages,
-		signalSemaphores);
+		signalSemaphores,
+		fenceResource->Get()->GetHandle());
 }
 
 void GBufferPass::CreateCommandBuffers(RenderGraph& graph)
@@ -110,7 +114,7 @@ void GBufferPass::CreateCommandBuffers(RenderGraph& graph)
 
 	m_CommandBufferHandles = graph.CreateResources<CommandBufferResource>(
 		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
-		"G-Buffer Command Buffer",
+		GBufferCommandBufferResourceName,
 		createCommandBuffer,
 		context.GraphicsCommandPool(),
 		true);
@@ -120,9 +124,6 @@ void GBufferPass::CreateSynchronizationPrimitives(RenderGraph& graph)
 {
 	auto createSemaphore = [](size_t index, const std::string& baseName)
 	{
-		VkSemaphoreCreateInfo semaphoreInfo = {};
-		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
 		auto resourceName = baseName + std::to_string(index);
 		auto semaphore = std::make_shared<VulkanSemaphore>(resourceName);
 		return std::make_shared<SemaphoreResource>(resourceName, semaphore);
@@ -130,8 +131,21 @@ void GBufferPass::CreateSynchronizationPrimitives(RenderGraph& graph)
 
 	m_RenderCompleteSemaphoreHandles = graph.CreateResources<SemaphoreResource>(
 		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
-		"G-Buffer Render Complete Semaphore",
+		GBufferRenderCompleteSemaphoreResourceName,
 		createSemaphore);
+
+	auto createFence = [](size_t index, const std::string& baseName)
+	{
+		auto resourceName = baseName + std::to_string(index);
+		// Start in signaled state
+		auto fence = std::make_shared<VulkanFence>(resourceName, true);
+		return std::make_shared<FenceResource>(resourceName, fence);
+	};
+
+	m_ResourcesInFlightFenceHandles = graph.CreateResources<FenceResource>(
+		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
+		GBufferResourcesInFlightResourceName,
+		createFence);
 }
 
 void GBufferPass::CreateTextures(RenderGraph& graph)
@@ -153,7 +167,7 @@ void GBufferPass::CreateTextures(RenderGraph& graph)
 		[&floatingPointAttachmentSpec](size_t index, const std::string& resourceBaseName)
 	{
 		floatingPointAttachmentSpec.DebugName = resourceBaseName + " " + std::to_string(index);
-		auto texture = std::make_shared<VulkanTexture2D>(floatingPointAttachmentSpec);
+		auto texture = VulkanTexture2D::CreateAttachment(floatingPointAttachmentSpec);
 		return std::make_shared<TextureResource>(floatingPointAttachmentSpec.DebugName, texture);
 	};
 
@@ -161,7 +175,7 @@ void GBufferPass::CreateTextures(RenderGraph& graph)
 		[&floatingPointAttachmentSpec](size_t index, const std::string& resourceBaseName)
 	{
 		floatingPointAttachmentSpec.DebugName = resourceBaseName + " " + std::to_string(index);
-		auto texture = std::make_shared<VulkanTexture2D>(floatingPointAttachmentSpec);
+		auto texture = VulkanTexture2D::CreateAttachment(floatingPointAttachmentSpec);
 		return std::make_shared<TextureResource>(floatingPointAttachmentSpec.DebugName, texture);
 	};
 
@@ -179,7 +193,7 @@ void GBufferPass::CreateTextures(RenderGraph& graph)
 		[&byteAttachmentSpec](size_t index, const std::string& resourceBaseName)
 	{
 		byteAttachmentSpec.DebugName = resourceBaseName + " " + std::to_string(index);
-		auto texture = std::make_shared<VulkanTexture2D>(byteAttachmentSpec);
+		auto texture = VulkanTexture2D::CreateAttachment(byteAttachmentSpec);
 		return std::make_shared<TextureResource>(byteAttachmentSpec.DebugName, texture);
 	};
 
@@ -197,14 +211,14 @@ void GBufferPass::CreateTextures(RenderGraph& graph)
 		[&depthTextureSpec](size_t index, const std::string& resourceBaseName)
 	{
 		depthTextureSpec.DebugName = resourceBaseName + " " + std::to_string(index);
-		auto texture = std::make_shared<VulkanTexture2D>(depthTextureSpec);
+		auto texture = VulkanTexture2D::CreateAttachment(depthTextureSpec);
 		return std::make_shared<TextureResource>(depthTextureSpec.DebugName, texture);
 	};
 
-	m_PositionTextureHandles = graph.CreateResources<TextureResource>(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, "G-Buffer Position Attachment", createPositionTexture);
-	m_NormalTextureHandles = graph.CreateResources<TextureResource>(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, "G-Buffer Normal Attachment", createNormalTexture);
-	m_AlbedoTextureHandles = graph.CreateResources<TextureResource>(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, "G-Buffer Albedo Attachment", createAlbedoTexture);
-	m_DepthTextureHandles = graph.CreateResources<TextureResource>(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, "G-Buffer Depth Attachment", createDepthTexture);
+	m_PositionTextureHandles = graph.CreateResources<TextureResource>(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, GBufferPositionAttachmentTextureResourceName, createPositionTexture);
+	m_NormalTextureHandles = graph.CreateResources<TextureResource>(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, GBufferNormalAttachmentTextureResourceName, createNormalTexture);
+	m_AlbedoTextureHandles = graph.CreateResources<TextureResource>(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, GBufferAlbedoAttachmentTextureResourceName, createAlbedoTexture);
+	m_DepthTextureHandles = graph.CreateResources<TextureResource>(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, GBufferDepthAttachmentTextureResourceName, createDepthTexture);
 }
 
 void GBufferPass::CreateRenderPass(RenderGraph& graph)
@@ -277,7 +291,7 @@ void GBufferPass::CreateRenderPass(RenderGraph& graph)
 		renderPass->Build();
 		return std::make_shared<RenderPassObjectResource>(resourceBaseName, renderPass);
 	};
-	m_RenderPassHandle = graph.CreateResource<RenderPassObjectResource>("G-Buffer Render Pass", createRenderPass);
+	m_RenderPassHandle = graph.CreateResource<RenderPassObjectResource>(GBufferRenderPassResourceName, createRenderPass);
 }
 
 void GBufferPass::CreateShaders(RenderGraph& graph)
@@ -293,8 +307,8 @@ void GBufferPass::CreateShaders(RenderGraph& graph)
 	auto gBufferVertPath = FileSystemUtil::PathToString(shaderDirectory / "gbuffer.vert");
 	auto gBufferFragPath = FileSystemUtil::PathToString(shaderDirectory / "gbuffer.frag");
 
-	m_VertexHandle = graph.CreateResource<ShaderResource>("G-Buffer Vertex Shader", createShader, gBufferVertPath, ShaderType::Vertex);
-	m_FragmentHandle = graph.CreateResource<ShaderResource>("G-Buffer Fragment Shader", createShader, gBufferFragPath, ShaderType::Fragment);
+	m_VertexHandle = graph.CreateResource<ShaderResource>(GBufferVertexShaderResourceName, createShader, gBufferVertPath, ShaderType::Vertex);
+	m_FragmentHandle = graph.CreateResource<ShaderResource>(GBufferFragmentShaderResourceName, createShader, gBufferFragPath, ShaderType::Fragment);
 }
 
 void GBufferPass::CreateMaterialLayout(RenderGraph& graph)
@@ -310,7 +324,7 @@ void GBufferPass::CreateMaterialLayout(RenderGraph& graph)
 	auto fragResource = graph.GetResource<ShaderResource>(m_FragmentHandle);
 
 	m_MaterialLayoutHandle = graph.CreateResource<MaterialLayoutResource>(
-		"G-Buffer Material Layout",
+		GBufferMaterialLayoutResourceName,
 		createMaterialLayout,
 		*vertResource->Get(),
 		*fragResource->Get());
@@ -328,7 +342,7 @@ void GBufferPass::CreateMaterial(RenderGraph& graph)
 	auto materialLayoutResource = graph.GetResource<MaterialLayoutResource>(m_MaterialLayoutHandle);
 
 	m_MaterialHandle = graph.CreateResource<MaterialResource>(
-		"G-Buffer Material",
+		GBufferMaterialResourceName,
 		createMaterial,
 		materialLayoutResource->Get());
 }
@@ -363,7 +377,7 @@ void GBufferPass::CreateGraphicsPipeline(RenderGraph& graph)
 	};
 
 	m_PipelineHandle = graph.CreateResource<GraphicsPipelineObjectResource>(
-		"G-Buffer Graphics Pipeline",
+		GBufferGraphicsPipelineResourceName,
 		createPipeline,
 		renderPassResource->Get().get(),
 		materialLayoutResource->Get().get(),
@@ -408,7 +422,7 @@ void GBufferPass::CreateFramebuffers(RenderGraph& graph)
 
 	m_FramebufferHandles = graph.CreateResources<FramebufferResource>(
 		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
-		"G-Buffer Framebuffer",
+		GBufferFramebufferResourceName,
 		createFramebuffer,
 		renderPassResource->Get().get(),
 		m_PositionTextureHandles,

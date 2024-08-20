@@ -195,6 +195,7 @@ void VulkanShaderReflection::ReflectPushConstants(const spirv_cross::Compiler& c
         for (uint32_t i = 0; i < bufferType.member_types.size(); ++i)
         {
             PushConstantRange range;
+			range.pushStructName = resource.name;
             range.name = compiler.get_member_name(bufferType.self, i);
             range.offset = compiler.get_member_decoration(bufferType.self, i, spv::DecorationOffset);
             range.size = compiler.get_declared_struct_member_size(bufferType, i);

@@ -159,6 +159,11 @@ void VulkanRenderPass::BeginPass(VkCommandBuffer commandBuffer, VkRenderPassBegi
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 }
 
+void VulkanRenderPass::NextSubpass(VkCommandBuffer commandBuffer, VkSubpassContents contents)
+{
+	vkCmdNextSubpass(commandBuffer, contents);
+}
+
 void VulkanRenderPass::EndPass(VkCommandBuffer commandBuffer)
 {
     vkCmdEndRenderPass(commandBuffer);

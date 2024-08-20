@@ -28,6 +28,8 @@ public:
 	void End();
 
 	void Reset();
+	void WaitForCompletion(VkFence fence);
+
 	static void Submit(VkQueue queue,
 		const std::vector<VulkanCommandBuffer*>& commandBuffers,
 		const std::vector<VkSemaphore>& waitSemaphores,

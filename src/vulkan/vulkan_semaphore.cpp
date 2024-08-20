@@ -9,6 +9,7 @@ VulkanSemaphore::VulkanSemaphore(std::string debugName)
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
 	VK_CHECK_RESULT(vkCreateSemaphore(VulkanContext::Get().Device(), &semaphoreInfo, nullptr, &m_Semaphore));
+	SetDebugUtilsObjectName(VulkanContext::Get().Device(), VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)m_Semaphore, m_DebugName.c_str());
 }
 
 VulkanSemaphore::~VulkanSemaphore()

@@ -22,8 +22,5 @@ struct FrameInfo
 	uint32_t ImageIndex;
     float DeltaTime;
     Scene& ActiveScene;
-    std::weak_ptr<VulkanBuffer> GlobalUbo;
-	std::weak_ptr<VulkanCommandBuffer> SwapchainSubmitCommandBuffer;
-	VkSemaphore RendererCompleteSemaphore;
     Camera& Cam;
 };

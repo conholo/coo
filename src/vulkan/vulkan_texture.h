@@ -28,7 +28,7 @@ public:
     static std::shared_ptr<VulkanTexture2D> CreateFromMemory(const TextureSpecification& specification, const Buffer& data);
     static std::shared_ptr<VulkanTexture2D> CreateAttachment(const TextureSpecification& specification);
 
-    explicit VulkanTexture2D(TextureSpecification  specification);
+    explicit VulkanTexture2D(TextureSpecification specification);
     ~VulkanTexture2D();
 
     VulkanTexture2D(const VulkanTexture2D&) = delete;

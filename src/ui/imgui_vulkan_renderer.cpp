@@ -1,12 +1,9 @@
 #include "vulkan/vulkan_swapchain_renderer.h"
 
 #include "ui/imgui_vulkan_renderer.h"
-#include "vulkan/vulkan_render_pass.h"
-#include "vulkan/vulkan_framebuffer.h"
-#include "vulkan/vulkan_graphics_pipeline.h"
-
-#include "core/platform_path.h"
 #include "core/window.h"
+#include "vulkan/render_passes/render_pass_resource.h"
+#include "vulkan/render_passes/render_graph_resource_declarations.h"
 
 #include <GLFW/glfw3.h>
 #include <backends/imgui_impl_vulkan.h>
@@ -14,80 +11,63 @@
 #include <imgui.h>
 #include <memory>
 
-void VulkanImGuiRenderer::Initialize(VulkanRenderPass& renderPassRef)
+void VulkanImGuiRenderer::Initialize(RenderGraph& graph)
 {
 	auto& swapchain = Application::Get().GetRenderer().VulkanSwapchain();
 	ImGui::CreateContext();
 	SetDarkThemeColors();
-	InitializeFontTexture();
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.DisplaySize = ImVec2(static_cast<float>(swapchain.Width()), static_cast<float>(swapchain.Height()));
 	io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
 
-	auto shaderDirectory = FileSystemUtil::GetShaderDirectory();
-	auto vertPath = FileSystemUtil::PathToString(shaderDirectory / "ui.vert");
-	auto fragPath = FileSystemUtil::PathToString(shaderDirectory / "ui.frag");
-
-	m_UIVertexShader = std::make_shared<VulkanShader>(vertPath, ShaderType::Vertex);
-	m_UIFragmentShader = std::make_shared<VulkanShader>(fragPath, ShaderType::Fragment);
-	m_UIMaterialLayout = std::make_shared<VulkanMaterialLayout>(m_UIVertexShader, m_UIFragmentShader, "UI Material Layout");
-	m_UIMaterial = std::make_unique<VulkanMaterial>(m_UIMaterialLayout);
-
-	auto bindingDescription = []()
-	{
-		std::vector<VkVertexInputBindingDescription> bindingDescriptions(1);
-		bindingDescriptions[0].binding = 0;
-		bindingDescriptions[0].stride = sizeof(ImDrawVert);
-		bindingDescriptions[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-		return bindingDescriptions;
-	};
-
-	auto attributeDescription = []()
-	{
-		std::vector<VkVertexInputAttributeDescription> attributeDescriptions{};
-
-		attributeDescriptions.push_back({0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(ImDrawVert, pos)});
-		attributeDescriptions.push_back({1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(ImDrawVert, uv)});
-		attributeDescriptions.push_back({2, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(ImDrawVert, col)});
-		return attributeDescriptions;
-	};
-
-	auto builder = VulkanGraphicsPipelineBuilder("G-Buffer Pipeline")
-					   .SetShaders(m_UIVertexShader, m_UIFragmentShader)
-					   .SetVertexInputDescription({bindingDescription(), attributeDescription()})
-					   .SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-					   .SetPolygonMode(VK_POLYGON_MODE_FILL)
-					   .SetCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE)
-					   .SetMultisampling(VK_SAMPLE_COUNT_1_BIT)
-					   .SetDepthTesting(false, false, VK_COMPARE_OP_LESS_OR_EQUAL)
-					   .SetRenderPass(&renderPassRef)
-					   .SetLayout(m_UIMaterialLayout->GetPipelineLayout());
-
-	m_UIPipeline = builder.Build();
-}
-
-void VulkanImGuiRenderer::InitializeFontTexture()
-{
-	ImGuiIO& io = ImGui::GetIO();
-
 	// Create font texture
 	unsigned char* fontData;
 	int texWidth, texHeight;
 	io.Fonts->GetTexDataAsRGBA32(&fontData, &texWidth, &texHeight);
+	m_FontMemoryBuffer = std::make_unique<Buffer>(fontData, texWidth * texHeight * 4 * sizeof(char));
 
-	ImageSpecification specification
+	auto createFontTexture =
+		[this, texWidth, texHeight](const std::string& resourceName)
 	{
-		.DebugName = "Font Image",
-		.Format = ImageFormat::RGBA,
-		.Usage = ImageUsage::Texture,
-		.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		.UsedInTransferOps = true,
-		.Width = static_cast<uint32_t>(texWidth),
-		.Height = static_cast<uint32_t>(texHeight),
-		.Mips = 1
+		TextureSpecification specification
+		{
+			.Format = ImageFormat::RGBA,
+			.Usage = TextureUsage::Texture,
+			.Width = static_cast<uint32_t>(texWidth),
+			.Height = static_cast<uint32_t>(texHeight),
+			.GenerateMips = true,
+			.UsedInTransferOps = true,
+			.CreateSampler = true,
+			.DebugName = resourceName,
+		};
+
+		auto texture = VulkanTexture2D::CreateFromMemory(specification,  *m_FontMemoryBuffer);
+		return std::make_shared<TextureResource>(resourceName, texture);
 	};
-	m_FontImage = std::make_unique<VulkanImage2D>(specification);
+
+	m_FontTextureHandle = graph.CreateResource<TextureResource>(UIFontTextureResourceName, createFontTexture);
+
+	// Initialize the empty buffers - these will get created and worked on in the Update function when draw lists are registered.
+	auto createNullBuffer =
+		[](size_t index, const std::string& resourceBaseName, VkBufferUsageFlags flags)
+	{
+		auto resourceName = resourceBaseName + " " + std::to_string(index);
+		auto buffer = std::make_shared<VulkanBuffer>();
+		return std::make_shared<BufferResource>(resourceName, buffer);
+	};
+
+	m_VertexBufferHandles = graph.CreateResources<BufferResource>(
+		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
+		UIVertexBufferResourceName,
+		createNullBuffer,
+		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+
+	m_IndexBufferHandles = graph.CreateResources<BufferResource>(
+		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
+		UIIndexBufferResourceName,
+		createNullBuffer,
+		VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 }
 
 void VulkanImGuiRenderer::Begin()
@@ -96,55 +76,58 @@ void VulkanImGuiRenderer::Begin()
 }
 
 // Update vertex and index buffer containing the imGui elements when required
-void VulkanImGuiRenderer::UpdateBuffers()
+void VulkanImGuiRenderer::Update(RenderGraph& graph, uint32_t frameIndex)
 {
+	ImGui::Begin("Test");
+	ImGui::Text("Hello");
+	ImGui::End();
+
+	//ImGui::ShowDemoWindow();
+	ImGui::Render();
 	ImDrawData* imDrawData = ImGui::GetDrawData();
-	// Note: Alignment is done inside buffer creation
 	VkDeviceSize vertexBufferSize = imDrawData->TotalVtxCount * sizeof(ImDrawVert);
 	VkDeviceSize indexBufferSize = imDrawData->TotalIdxCount * sizeof(ImDrawIdx);
 
 	if (vertexBufferSize == 0 || indexBufferSize == 0)
 		return;
 
-	// Update buffers only if vertex or index count has been changed compared to current buffer size
-
-	// Vertex buffer
-	if (m_VertexBuffer == nullptr || m_VertexBuffer->GetBuffer() == VK_NULL_HANDLE || m_VertexCount != imDrawData->TotalVtxCount)
+	ResourceHandle<BufferResource> vboHandle = m_VertexBufferHandles[frameIndex];
+	auto* vboResource = graph.GetResource<BufferResource>(vboHandle);
+	auto vbo = vboResource->Get();
+	if (vbo->GetBuffer() == VK_NULL_HANDLE || m_VertexCount != imDrawData->TotalVtxCount)
 	{
-		if(m_VertexBuffer)
-		{
-			m_VertexBuffer->Unmap();
-			m_VertexBuffer.reset();
-		}
-		m_VertexBuffer = std::make_unique<VulkanBuffer>(
+		// First free any resources from the existing buffer.
+		if(vbo->GetBuffer() != VK_NULL_HANDLE)
+			vbo->Destroy();
+
+		vbo->Initialize(
 			vertexBufferSize,
 			1,
 			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-		m_VertexCount = imDrawData->TotalVtxCount;
-		m_VertexBuffer->Map();
+		vbo->Map();
 	}
 
-	// Index buffer
-	if (m_IndexBuffer == nullptr || m_IndexBuffer->GetBuffer() == VK_NULL_HANDLE || m_IndexCount < imDrawData->TotalIdxCount)
+	ResourceHandle<BufferResource> eboHandle = m_IndexBufferHandles[frameIndex];
+	auto* eboResource = graph.GetResource<BufferResource>(eboHandle);
+	auto ebo = eboResource->Get();
+	if (ebo->GetBuffer() == VK_NULL_HANDLE || m_IndexCount != imDrawData->TotalIdxCount)
 	{
-		if(m_IndexBuffer)
-		{
-			m_IndexBuffer->Unmap();
-			m_IndexBuffer.reset();
-		}
-		m_IndexBuffer = std::make_unique<VulkanBuffer>(
-			vertexBufferSize,
+		// First free any resources from the existing buffer.
+		if(ebo->GetBuffer() != VK_NULL_HANDLE)
+			ebo->Destroy();
+
+		ebo->Initialize(
+			indexBufferSize,
 			1,
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-		m_IndexCount = imDrawData->TotalVtxCount;
-		m_IndexBuffer->Map();
+		ebo->Map();
 	}
 
 	// Upload data
-	auto* vtxDst = (ImDrawVert*)m_VertexBuffer->GetMappedMemory();
-	auto* idxDst = (ImDrawIdx*)m_IndexBuffer->GetMappedMemory();
+	auto* vtxDst = (ImDrawVert*)vbo->GetMappedMemory();
+	auto* idxDst = (ImDrawIdx*)ebo->GetMappedMemory();
 
 	for (int n = 0; n < imDrawData->CmdListsCount; n++)
 	{
@@ -156,63 +139,8 @@ void VulkanImGuiRenderer::UpdateBuffers()
 	}
 
 	// Flush to make writes visible to GPU
-	m_VertexBuffer->Flush();
-	m_IndexBuffer->Flush();
-}
-
-void VulkanImGuiRenderer::RecordImGuiPass(FrameInfo& frameInfo)
-{
-	//if(frameInfo.SwapchainSubmitCommandBuffer) Check if in recording state - if it is not, error out
-
-	ImGui::Render();
-	UpdateBuffers();
-
-	m_UIPipeline->Bind(frameInfo.SwapchainSubmitCommandBuffer);
-
-	// UI scale and translate via push constants
-	m_TransformPushConstants.Scale = glm::vec2(2.0f / ImGui::GetIO().DisplaySize.x, 2.0f / ImGui::GetIO().DisplaySize.y);
-	m_TransformPushConstants.Translate = glm::vec2(-1.0f);
-	m_UIMaterial->SetPushConstant<DisplayTransformPushConstants>("p_Transform", m_TransformPushConstants);
-	m_UIMaterial->UpdateDescriptorSets(frameInfo.FrameIndex,
-		{{0,
-			{{
-				.binding = 0,
-				.type = DescriptorUpdate::Type::Image,
-				.imageInfo = m_FontImage->GetDescriptorInfo()}}}});
-
-	m_UIMaterial->BindPushConstants(frameInfo.SwapchainSubmitCommandBuffer);
-	m_UIMaterial->BindDescriptors(frameInfo.FrameIndex, frameInfo.SwapchainSubmitCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS);
-
-	// Render commands
-	ImDrawData* imDrawData = ImGui::GetDrawData();
-	int32_t vertexOffset = 0;
-	int32_t indexOffset = 0;
-
-	if (imDrawData->CmdListsCount > 0)
-	{
-		VkDeviceSize offsets[1] = { 0 };
-		VkBuffer buffers[] = {m_VertexBuffer->GetBuffer()};
-		vkCmdBindVertexBuffers(frameInfo.SwapchainSubmitCommandBuffer, 0, 1, buffers, offsets);
-		vkCmdBindIndexBuffer(frameInfo.SwapchainSubmitCommandBuffer, m_IndexBuffer->GetBuffer(), 0, VK_INDEX_TYPE_UINT16);
-
-		for (int32_t i = 0; i < imDrawData->CmdListsCount; i++)
-		{
-			const ImDrawList* cmd_list = imDrawData->CmdLists[i];
-			for (int32_t j = 0; j < cmd_list->CmdBuffer.Size; j++)
-			{
-				const ImDrawCmd* imDrawCmd = &cmd_list->CmdBuffer[j];
-				VkRect2D scissorRect;
-				scissorRect.offset.x = std::max((int32_t)(imDrawCmd->ClipRect.x), 0);
-				scissorRect.offset.y = std::max((int32_t)(imDrawCmd->ClipRect.y), 0);
-				scissorRect.extent.width = (uint32_t)(imDrawCmd->ClipRect.z - imDrawCmd->ClipRect.x);
-				scissorRect.extent.height = (uint32_t)(imDrawCmd->ClipRect.w - imDrawCmd->ClipRect.y);
-				vkCmdSetScissor(frameInfo.SwapchainSubmitCommandBuffer, 0, 1, &scissorRect);
-				vkCmdDrawIndexed(frameInfo.SwapchainSubmitCommandBuffer, imDrawCmd->ElemCount, 1, indexOffset, vertexOffset, 0);
-				indexOffset += imDrawCmd->ElemCount;
-			}
-			vertexOffset += cmd_list->VtxBuffer.Size;
-		}
-	}
+	vbo->Flush();
+	ebo->Flush();
 }
 
 void VulkanImGuiRenderer::End()
@@ -269,7 +197,15 @@ void VulkanImGuiRenderer::SetDarkThemeColors()
 	colors[ImGuiCol_TitleBgCollapsed] = ImVec4{0.15f, 0.1505f, 0.151f, 1.0f};
 }
 
-void VulkanImGuiRenderer::Shutdown()
+void VulkanImGuiRenderer::Shutdown(RenderGraph& graph)
 {
+	auto freeBuffer =
+		[](std::shared_ptr<VulkanBuffer> buffer)
+	{
+		buffer->Unmap();
+		buffer.reset();
+	};
 
+	graph.TryFreeResources<BufferResource>(UIVertexBufferResourceName, freeBuffer);
+	graph.TryFreeResources<BufferResource>(UIIndexBufferResourceName, freeBuffer);
 }

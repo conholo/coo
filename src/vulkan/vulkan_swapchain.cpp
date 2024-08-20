@@ -1,79 +1,128 @@
 #include "vulkan_swapchain.h"
 
 #include "core/frame_info.h"
+#include "vulkan/render_passes/render_graph.h"
+#include "vulkan/render_passes/render_graph_resource_declarations.h"
 #include "vulkan_context.h"
-#include "vulkan_utils.h"
 #include "vulkan_fence.h"
+#include "vulkan_framebuffer.h"
+#include "vulkan_render_pass.h"
+#include "vulkan_texture.h"
+#include "vulkan_utils.h"
 
-#include <vulkan/render_passes/render_graph.h>
+#include <core/application.h>
 
 #include <utility>
 
-VulkanSwapchain::VulkanSwapchain(VkExtent2D windowExtent) : m_WindowExtent(windowExtent)
+VulkanSwapchain::VulkanSwapchain(RenderGraph& graph, VkExtent2D windowExtent)
+	: m_WindowExtent(windowExtent)
 {
-	Initialize();
+	Invalidate(graph);
 }
 
-VulkanSwapchain::VulkanSwapchain(VkExtent2D windowExtent, std::shared_ptr<VulkanSwapchain> previous)
+VulkanSwapchain::VulkanSwapchain(RenderGraph& graph, VkExtent2D windowExtent, std::shared_ptr<VulkanSwapchain> previous)
 	: m_WindowExtent(windowExtent), m_PreviousSwapchain{std::move(previous)}
 {
-	Initialize();
+	Invalidate(graph);
 	if (m_PreviousSwapchain)
 	{
-		m_PreviousSwapchain->Destroy();
+		m_PreviousSwapchain->DestroyHandle();
 		m_PreviousSwapchain = nullptr;
 	}
 }
 
 VulkanSwapchain::~VulkanSwapchain()
 {
-	Destroy();
+	// The only resource explicitly owned by the swapchain is the VkSwapchainKHR - so free that.
+	// The rest are owned by the RenderGraph instance.
+	// The SwapchainRenderer needs to explicitly signal to the RenderGraph when it's time to free all
+	// swapchain-related resources.
+	DestroyHandle();
 }
 
-void VulkanSwapchain::Destroy()
+void VulkanSwapchain::DestroyHandle()
 {
 	auto device = VulkanContext::Get().Device();
-
-	for (auto& image : m_Images)
-	{
-		image->ReleaseSwapchainResources();
-	}
-	m_Images.clear();
 
 	if (m_Swapchain != VK_NULL_HANDLE)
 	{
 		vkDestroySwapchainKHR(device, m_Swapchain, nullptr);
 		m_Swapchain = VK_NULL_HANDLE;
 	}
-
-	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-	{
-		if (m_ImageAvailableSemaphores[i] != VK_NULL_HANDLE)
-		{
-			vkDestroySemaphore(device, m_ImageAvailableSemaphores[i], nullptr);
-			m_ImageAvailableSemaphores[i] = VK_NULL_HANDLE;
-		}
-		if (m_RenderCompleteSemaphores[i] != VK_NULL_HANDLE)
-		{
-			vkDestroySemaphore(device, m_RenderCompleteSemaphores[i], nullptr);
-			m_RenderCompleteSemaphores[i] = VK_NULL_HANDLE;
-		}
-		if (m_InFlightFences[i] != VK_NULL_HANDLE)
-		{
-			vkDestroyFence(device, m_InFlightFences[i], nullptr);
-			m_InFlightFences[i] = VK_NULL_HANDLE;
-		}
-	}
-	m_ImagesInFlight.clear();
 }
 
-void VulkanSwapchain::Initialize()
+VkResult VulkanSwapchain::AcquireNextImage(RenderGraph& graph, uint32_t frameIndex, uint32_t* imageIndex)
 {
-	CreateSwapchain();
-	CreateSyncObjects();
+	// For the current frame in flight, make sure that the last set of resources used (UI pass) on the swapchain image
+	// has been submitted.
+	// For example:
+	/*
+	 * Frame 1 (frame in flight 1): Acquisition - Nothing to wait for -> Passes -> UI Submission, Fence Set, Not Signaled
+	 * Frame 2 (frame in flight 0): ...
+	 * Frame 3 (frame in flight 1): Acquisition - Wait for fence submitted in Frame 1 before starting the new frame.
+	 */
+	auto* swapchainCommandBufferResource = graph.GetResource<CommandBufferResource>(SwapchainCommandBufferResourceName, frameIndex);
+	auto* swapchainResourcesInFlightResource = graph.GetResource<FenceResource>(SwapchainResourcesInFlightFenceResourceName, frameIndex);
+	swapchainCommandBufferResource->Get()->WaitForCompletion(swapchainResourcesInFlightResource->Get()->GetHandle());
+
+	auto* imageAvailableSemaphoreResource = graph.GetResource<SemaphoreResource>(SwapchainImageAvailableSemaphoreResourceName, frameIndex);
+
+	VkResult result = vkAcquireNextImageKHR(
+		VulkanContext::Get().Device(),
+		m_Swapchain,
+		std::numeric_limits<uint64_t>::max(),
+		imageAvailableSemaphoreResource->Get()->GetHandle(),
+		VK_NULL_HANDLE,
+		imageIndex);
+
+	return result;
 }
 
-void VulkanSwapchain::CreateSwapchain()
+VkResult VulkanSwapchain::Present(RenderGraph& graph, uint32_t frameIndex, const uint32_t* imageIndex)
+{
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+	auto swapchainRenderingCompleteSemaphore = graph.GetResource<SemaphoreResource>(SwapchainRenderingCompleteSemaphoreResourceName, frameIndex);
+	VkSemaphore waitSemaphores[] = { swapchainRenderingCompleteSemaphore->Get()->GetHandle() };
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = waitSemaphores;
+
+	VkSwapchainKHR swapChains[] = {m_Swapchain};
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = swapChains;
+
+	presentInfo.pImageIndices = imageIndex;
+	auto result = vkQueuePresentKHR(VulkanContext::Get().PresentQueue(), &presentInfo);
+	return result;
+}
+
+void VulkanSwapchain::FreeAllResources(RenderGraph& graph)
+{
+	// Free the swapchain if it exists
+	DestroyHandle();
+
+	// Free the images if they exist
+	auto freeSwapchainImages =
+		[](std::shared_ptr<VulkanImage2D> image)
+	{
+		image->ReleaseSwapchainResources();
+		image.reset();
+	};
+	graph.TryFreeResources<Image2DResource>(SwapchainImage2DResourceName, freeSwapchainImages);
+
+	m_SwapchainImagesHandles.clear();
+}
+
+void VulkanSwapchain::Invalidate(RenderGraph& graph)
+{
+	FreeAllResources(graph);
+
+	CreateSwapchain(graph);
+	CreateImages(graph);
+}
+
+void VulkanSwapchain::CreateSwapchain(RenderGraph& graph)
 {
 	SwapchainSupportDetails swapChainSupport = VulkanContext::Get().QuerySwapchainSupportDetailsOnSwapchainRecreation();
 
@@ -81,17 +130,17 @@ void VulkanSwapchain::CreateSwapchain()
 	VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapChainSupport.PresentModes);
 	VkExtent2D extent = ChooseSwapExtent(swapChainSupport.Capabilities);
 
-	uint32_t imageCount = swapChainSupport.Capabilities.minImageCount + 1;
-	if (swapChainSupport.Capabilities.maxImageCount > 0 && imageCount > swapChainSupport.Capabilities.maxImageCount)
+	m_ImageCount = swapChainSupport.Capabilities.minImageCount + 1;
+	if (swapChainSupport.Capabilities.maxImageCount > 0 && m_ImageCount > swapChainSupport.Capabilities.maxImageCount)
 	{
-		imageCount = swapChainSupport.Capabilities.maxImageCount;
+		m_ImageCount = swapChainSupport.Capabilities.maxImageCount;
 	}
 
 	VkSwapchainCreateInfoKHR createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	createInfo.surface = VulkanContext::Get().Surface();
 
-	createInfo.minImageCount = imageCount;
+	createInfo.minImageCount = m_ImageCount;
 	createInfo.imageFormat = surfaceFormat.format;
 	createInfo.imageColorSpace = surfaceFormat.colorSpace;
 	createInfo.imageExtent = extent;
@@ -125,127 +174,35 @@ void VulkanSwapchain::CreateSwapchain()
 
 	m_SwapchainImageFormat = surfaceFormat.format;
 	m_SwapchainExtent = extent;
+}
 
-	vkGetSwapchainImagesKHR(VulkanContext::Get().Device(), m_Swapchain, &imageCount, nullptr);
-	std::vector<VkImage> swapChainImages(imageCount);
-	vkGetSwapchainImagesKHR(VulkanContext::Get().Device(), m_Swapchain, &imageCount, swapChainImages.data());
+void VulkanSwapchain::CreateImages(RenderGraph& graph)
+{
+	vkGetSwapchainImagesKHR(VulkanContext::Get().Device(), m_Swapchain, &m_ImageCount, nullptr);
+	std::vector<VkImage> swapChainImages(m_ImageCount);
+	vkGetSwapchainImagesKHR(VulkanContext::Get().Device(), m_Swapchain, &m_ImageCount, swapChainImages.data());
 
-	m_Images.resize(imageCount);
-	for (uint32_t i = 0; i < imageCount; i++)
+	auto swapchainImageCreateFn =
+		[&](size_t index, const std::string& resourceBaseName, const std::vector<VkImage>& swapchainImages)
 	{
+		auto resourceName = resourceBaseName + " " + std::to_string(index);;
 		ImageSpecification spec;
 		spec.Width = m_SwapchainExtent.width;
 		spec.Height = m_SwapchainExtent.height;
 		spec.Format = ImageUtils::VulkanFormatToImageFormat(m_SwapchainImageFormat);
 		spec.Usage = ImageUsage::Swapchain;
-		spec.ExistingImage = swapChainImages[i];
+		spec.ExistingImage = swapchainImages[index];
 		spec.SwapchainFormat = m_SwapchainImageFormat;
 		spec.CreateSampler = true;
-		spec.DebugName = "Swapchain Image " + std::to_string(i);
-		m_Images[i] = std::make_shared<VulkanImage2D>(spec);
-	}
+		spec.DebugName = resourceName;
+
+		auto image2D = std::make_shared<VulkanImage2D>(spec);
+		return std::make_shared<Image2DResource>(resourceName, image2D);
+	};
+
+	m_SwapchainImagesHandles = graph.CreateResources<Image2DResource>(m_ImageCount, SwapchainImage2DResourceName, swapchainImageCreateFn, swapChainImages);
 }
 
-VkResult VulkanSwapchain::AcquireNextImage(RenderGraph& graph, uint32_t frameIndex, uint32_t* imageIndex)
-{
-	auto* imageAvailableSemaphoreResource = graph.GetResource<SemaphoreResource>("Rendering Complete Semaphore", frameIndex);
-	auto* frameResourcesAvailableFenceResource = graph.GetResource<FenceResource>("Frame Resources Available Fence", frameIndex);
-
-	std::vector<VkFence> resourcesAvailableFence = { frameResourcesAvailableFenceResource->Get()->GetHandle() };
-	vkWaitForFences(VulkanContext::Get().Device(), 1, resourcesAvailableFence.data(), VK_TRUE, std::numeric_limits<uint64_t>::max());
-
-	VkResult result = vkAcquireNextImageKHR(
-		VulkanContext::Get().Device(),
-		m_Swapchain,
-		std::numeric_limits<uint64_t>::max(),
-		imageAvailableSemaphoreResource->Get()->GetHandle(),
-		VK_NULL_HANDLE,
-		imageIndex);
-
-	return result;
-}
-
-void VulkanSwapchain::SubmitCommandBuffer(RenderGraph& renderGraph, FrameInfo& frameInfo)
-{
-	/*
-	 *  Before submitting the composition/display command buffer, wait on the pass before this using the semaphore.
-	 *  Let the renderer decide on the exact barrier - in the case of a single pass renderer, the wait condition for the
-	 *  swapchain draw submission is for the next swapchain image to become available.  The signal condition provided by the
-	 * 	renderer is *usually* the only wait condition needed for displaying the image. For the case of a more involved multi-pass
-	 * 	renderer, the wait condition for the swapchain command buffer submission will be the previous pass in the chain of passes.
-	 */
-
-	if(renderGraph.GetResource())
-
-	// Submit Composition pass
-	std::vector<VkSemaphore> waitSemaphores = { frameInfo.RendererCompleteSemaphore };
-	std::vector<VkPipelineStageFlags> waitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	std::vector<VkSemaphore> signalSemaphores = { m_RenderCompleteSemaphores[frameInfo.FrameIndex] };
-	std::vector<VulkanCommandBuffer*> drawCmdBuffers = { &*frameInfo.SwapchainSubmitCommandBuffer.lock() };
-
-	VulkanCommandBuffer::Submit(
-		VulkanContext::Get().GraphicsQueue(),
-		drawCmdBuffers,
-		waitSemaphores,
-		waitStages,
-		signalSemaphores);
-}
-
-VkResult VulkanSwapchain::Present(FrameInfo& frameInfo, const uint32_t* imageIndex)
-{
-	VkPresentInfoKHR presentInfo = {};
-	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-
-	VkSemaphore waitSemaphores[] = { m_RenderCompleteSemaphores[frameInfo.FrameIndex] };
-	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = waitSemaphores;
-
-	VkSwapchainKHR swapChains[] = {m_Swapchain};
-	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = swapChains;
-
-	presentInfo.pImageIndices = imageIndex;
-	auto result = vkQueuePresentKHR(VulkanContext::Get().PresentQueue(), &presentInfo);
-	return result;
-}
-
-std::weak_ptr<VulkanImage2D> VulkanSwapchain::GetImage(uint32_t index) const
-{
-	if (index >= m_Images.size())
-		return {};
-	return m_Images[index];
-}
-
-void VulkanSwapchain::CreateSyncObjects()
-{
-	auto device = VulkanContext::Get().Device();
-	m_ImageAvailableSemaphores.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
-	m_RenderCompleteSemaphores.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
-	m_InFlightFences.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
-	m_ImagesInFlight.resize(ImageCount(), VK_NULL_HANDLE);
-
-	VkSemaphoreCreateInfo semaphoreInfo = {};
-	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-	VkFenceCreateInfo fenceInfo = {};
-	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-	for (size_t i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; i++)
-	{
-		VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]));
-		auto semaphoreName = std::string("Image Available ") + std::to_string(i);
-		SetDebugUtilsObjectName(device, VK_OBJECT_TYPE_SEMAPHORE, (uint64_t) m_ImageAvailableSemaphores[i], semaphoreName.c_str());
-
-		VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &m_RenderCompleteSemaphores[i]));
-		semaphoreName = std::string("Render Complete ") + std::to_string(i);
-		SetDebugUtilsObjectName(device, VK_OBJECT_TYPE_SEMAPHORE, (uint64_t) m_RenderCompleteSemaphores[i], semaphoreName.c_str());
-
-		VK_CHECK_RESULT(vkCreateFence(device, &fenceInfo, nullptr, &m_InFlightFences[i]));
-		auto fenceName = std::string("In Flight Fence ") + std::to_string(i);
-		SetDebugUtilsObjectName(device, VK_OBJECT_TYPE_FENCE, (uint64_t) m_InFlightFences[i], fenceName.c_str());
-	}
-}
 
 VkSurfaceFormatKHR VulkanSwapchain::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
 {

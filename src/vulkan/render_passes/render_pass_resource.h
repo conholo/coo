@@ -6,12 +6,14 @@
 #include <string>
 #include <utility>
 #include <variant>
+#include <limits>
 
 // Forward declarations
 class VulkanTexture2D;
 class VulkanBuffer;
 class VulkanSampler;
 class VulkanImageView;
+class VulkanImage2D;
 class VulkanFramebuffer;
 class VulkanRenderPass;
 class VulkanGraphicsPipeline;
@@ -52,6 +54,7 @@ public:
 		Buffer,
 		Sampler,
 		ImageView,
+		Image,
 		Fence,
 		Semaphore,
 		RenderPass,
@@ -77,6 +80,9 @@ public:
 	{
 		return m_Type;
 	}
+
+	template<typename T>
+	std::shared_ptr<T> Get() { }
 
 private:
 	std::string m_Name;
@@ -162,10 +168,17 @@ private:
 class FenceResource : public RenderPassResource
 {
 public:
+	explicit FenceResource(const std::string& name)
+		: RenderPassResource(name, Type::Fence)
+	{
+	}
+
 	FenceResource(const std::string& name, std::shared_ptr<VulkanFence> fence)
 		: RenderPassResource(name, Type::Fence), m_Fence(std::move(fence))
 	{
 	}
+
+	void Set(const std::shared_ptr<VulkanFence>& fence) { m_Fence = fence; }
 
 	std::shared_ptr<VulkanFence> Get() const
 	{
@@ -173,7 +186,7 @@ public:
 	}
 
 private:
-	std::shared_ptr<VulkanFence> m_Fence;
+	std::shared_ptr<VulkanFence> m_Fence = nullptr;
 };
 
 class SemaphoreResource : public RenderPassResource
@@ -213,6 +226,11 @@ private:
 class BufferResource : public RenderPassResource
 {
 public:
+	explicit BufferResource(const std::string& name)
+		: RenderPassResource(name, Type::Buffer)
+	{
+	}
+
 	BufferResource(const std::string& name, std::shared_ptr<VulkanBuffer> buffer)
 		: RenderPassResource(name, Type::Buffer), m_Buffer(std::move(buffer))
 	{
@@ -259,6 +277,23 @@ public:
 
 private:
 	std::shared_ptr<VulkanImageView> m_ImageView;
+};
+
+class Image2DResource : public RenderPassResource
+{
+public:
+	Image2DResource(const std::string& name, std::shared_ptr<VulkanImage2D> image)
+		: RenderPassResource(name, Type::Image), m_Image(std::move(image))
+	{
+	}
+
+	std::shared_ptr<VulkanImage2D> Get() const
+	{
+		return m_Image;
+	}
+
+private:
+	std::shared_ptr<VulkanImage2D> m_Image;
 };
 
 class RenderPassObjectResource : public RenderPassResource

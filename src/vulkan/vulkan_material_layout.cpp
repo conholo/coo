@@ -73,7 +73,7 @@ void VulkanMaterialLayout::ProcessPushConstants(VulkanShader& vertShader, Vulkan
     {
         for (const auto& pc : reflection.GetPushConstantRanges())
         {
-            m_PushConstantRanges.push_back({ pc.name, stageFlags, pc.offset, pc.size });
+            m_PushConstantRanges.push_back({ pc.pushStructName, pc.name, stageFlags, pc.offset, pc.size });
         }
     };
 
@@ -109,10 +109,10 @@ void VulkanMaterialLayout::ProcessPushConstants(VulkanShader& vertShader, Vulkan
 		auto& prev = m_PushConstantRanges[i - 1];
 		auto& curr = m_PushConstantRanges[i];
 
-		if (prev.stageFlags == curr.stageFlags)
+		if (prev.stageFlags == curr.stageFlags && prev.pushStructName == curr.pushStructName)
 		{
 			prev.size = curr.offset + curr.size - prev.offset;
-			prev.name += "+" + curr.name;
+			prev.name = prev.pushStructName;
 			m_PushConstantRanges.erase(m_PushConstantRanges.begin() + i);
 		}
 		else

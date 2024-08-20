@@ -93,21 +93,51 @@ VulkanBuffer::VulkanBuffer(
     VkBufferUsageFlags usageFlags,
     VkMemoryPropertyFlags memoryPropertyFlags,
     VkDeviceSize minOffsetAlignment)
-    : m_InstanceCount{instanceCount},
-      m_InstanceSize{instanceSize},
-      m_UsageFlags{usageFlags},
-      m_MemoryPropertyFlags{memoryPropertyFlags}
 {
-    m_AlignmentSize = GetAlignment(instanceSize, minOffsetAlignment);
-    m_BufferSize = m_AlignmentSize * instanceCount;
-    CreateVkBuffer(m_BufferSize, usageFlags, memoryPropertyFlags, m_Buffer, m_Memory);
+	Initialize(instanceSize, instanceCount, usageFlags, memoryPropertyFlags, minOffsetAlignment);
+}
+
+void VulkanBuffer::Initialize(
+	VkDeviceSize instanceSize,
+	uint32_t instanceCount,
+	VkBufferUsageFlags usageFlags,
+	VkMemoryPropertyFlags memoryPropertyFlags,
+	VkDeviceSize minOffsetAlignment)
+{
+	m_AlignmentSize = GetAlignment(instanceSize, minOffsetAlignment);
+	m_BufferSize = m_AlignmentSize * instanceCount;
+	m_InstanceCount = instanceCount;
+	m_UsageFlags = usageFlags;
+	m_InstanceSize = instanceSize;
+	m_MemoryPropertyFlags = memoryPropertyFlags;
+	CreateVkBuffer(m_BufferSize, usageFlags, memoryPropertyFlags, m_Buffer, m_Memory);
+}
+
+void VulkanBuffer::Destroy()
+{
+	Unmap();
+	if(m_Buffer != VK_NULL_HANDLE)
+	{
+		vkDestroyBuffer(VulkanContext::Get().Device(), m_Buffer, nullptr);
+		m_Buffer = VK_NULL_HANDLE;
+	}
+	if(m_Memory != VK_NULL_HANDLE)
+	{
+		vkFreeMemory(VulkanContext::Get().Device(), m_Memory, nullptr);
+		m_Memory = VK_NULL_HANDLE;
+	}
+
+	m_InstanceCount = 0;
+	m_InstanceSize = 0;
+	m_AlignmentSize = 0;
+	m_BufferSize = 0;
+	m_MemoryPropertyFlags = {};
+	m_UsageFlags = {};
 }
 
 VulkanBuffer::~VulkanBuffer()
 {
-    Unmap();
-    vkDestroyBuffer(VulkanContext::Get().Device(), m_Buffer, nullptr);
-    vkFreeMemory(VulkanContext::Get().Device(), m_Memory, nullptr);
+	Destroy();
 }
 
 /**

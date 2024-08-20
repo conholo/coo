@@ -10,6 +10,7 @@ VulkanFence::VulkanFence(std::string debugName, bool signaled)
 	fenceInfo.flags = signaled & VK_FENCE_CREATE_SIGNALED_BIT;
 
 	VK_CHECK_RESULT(vkCreateFence(VulkanContext::Get().Device(), &fenceInfo, nullptr, &m_Fence));
+	SetDebugUtilsObjectName(VulkanContext::Get().Device(), VK_OBJECT_TYPE_FENCE, (uint64_t)m_Fence, m_DebugName.c_str());
 }
 
 VulkanFence::~VulkanFence()

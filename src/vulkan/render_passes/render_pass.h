@@ -2,8 +2,6 @@
 
 #include "render_pass_resource.h"
 
-#include <vector>
-
 class FrameInfo;
 class RenderGraph;
 
@@ -16,3 +14,4 @@ public:
 private:
 	friend class RenderGraph;
 };
+

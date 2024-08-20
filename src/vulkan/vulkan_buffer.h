@@ -5,6 +5,8 @@
 class VulkanBuffer
 {
 public:
+
+	VulkanBuffer() = default;
     VulkanBuffer(
         VkDeviceSize instanceSize,
         uint32_t instanceCount,
@@ -13,6 +15,15 @@ public:
         VkDeviceSize minOffsetAlignment = 1);
 
     ~VulkanBuffer();
+
+	void Initialize(
+		VkDeviceSize instanceSize,
+		uint32_t instanceCount,
+		VkBufferUsageFlags usageFlags,
+		VkMemoryPropertyFlags memoryPropertyFlags,
+		VkDeviceSize minOffsetAlignment = 1);
+
+	void Destroy();
 
     static void CreateVkBuffer(
             VkDeviceSize size,
@@ -64,10 +75,10 @@ private:
     VkBuffer m_Buffer = VK_NULL_HANDLE;
     VkDeviceMemory m_Memory = VK_NULL_HANDLE;
 
-    VkDeviceSize m_BufferSize;
-    uint32_t m_InstanceCount;
-    VkDeviceSize m_InstanceSize;
-    VkDeviceSize m_AlignmentSize;
-    VkBufferUsageFlags m_UsageFlags;
-    VkMemoryPropertyFlags m_MemoryPropertyFlags;
+    VkDeviceSize m_BufferSize{};
+    uint32_t m_InstanceCount{};
+    VkDeviceSize m_InstanceSize{};
+    VkDeviceSize m_AlignmentSize{};
+    VkBufferUsageFlags m_UsageFlags{};
+    VkMemoryPropertyFlags m_MemoryPropertyFlags{};
 };

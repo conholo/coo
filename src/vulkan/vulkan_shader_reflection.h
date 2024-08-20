@@ -48,6 +48,7 @@ public:
 
     struct PushConstantRange
     {
+        std::string pushStructName;
         std::string name;
         uint32_t offset;
         uint32_t size;

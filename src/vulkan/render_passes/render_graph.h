@@ -74,7 +74,8 @@ public:
 		auto countIt = m_ResourceCounts.find(baseName);
 		if (handleIt == m_ResourceHandles.end() || countIt == m_ResourceCounts.end())
 		{
-			throw std::runtime_error("Resource not found: " + baseName);
+			std::cout << "Resource not found: '" << baseName << "'\n";
+			return nullptr;
 		}
 
 		size_t resourceIndex = handleIt->second.GetId() + (frameIndex % countIt->second);
@@ -89,6 +90,137 @@ public:
 			throw std::bad_cast();
 		}
 		return resource;
+	}
+
+	template<typename T>
+	bool HasResource(const std::string& baseName, uint32_t* outCount = nullptr) const
+	{
+		auto handleIt = m_ResourceHandles.find(baseName);
+		auto countIt = m_ResourceCounts.find(baseName);
+
+		if (handleIt != m_ResourceHandles.end() && countIt != m_ResourceCounts.end())
+		{
+			if (outCount)
+			{
+				*outCount = static_cast<uint32_t>(countIt->second);
+			}
+			return true;
+		}
+
+		return false;
+	}
+
+	template<typename T, typename FreeFn, typename... Args>
+	bool FreeResource(ResourceHandle<T> handle, FreeFn&& freeFn, Args&&... args)
+	{
+		size_t resourceIndex = handle.GetId();
+		if (resourceIndex >= m_Resources.size())
+		{
+			std::cerr << "Invalid resource handle" << std::endl;
+			return false;
+		}
+
+		// Attempt to cast the resource to the correct type
+		auto resource = std::dynamic_pointer_cast<T>(m_Resources[resourceIndex]);
+		if (!resource)
+		{
+			std::cerr << "Bad cast when trying to free resource" << std::endl;
+			return false;
+		}
+
+		// Call the provided free function
+		freeFn(resource->Get(), std::forward<Args>(args)...);
+
+		// Remove the resource from the list and reset it
+		m_Resources[resourceIndex].reset();
+
+		// Erase the resource entry from the maps
+		auto it = std::find_if(m_ResourceHandles.begin(), m_ResourceHandles.end(),
+			[resourceIndex](const auto& pair) { return pair.second.GetId() == resourceIndex; });
+		if (it != m_ResourceHandles.end())
+		{
+			std::string baseName = it->first;
+			m_ResourceHandles.erase(it);
+			m_ResourceCounts.erase(baseName);
+		}
+
+		// Adjust subsequent resource IDs in the handles map
+		for (auto& pair : m_ResourceHandles)
+		{
+			if (pair.second.GetId() > resourceIndex)
+			{
+				pair.second = ResourceHandle<RenderPassResource>(pair.second.GetId() - 1);
+			}
+		}
+
+		// Remove the entry from the m_Resources vector
+		m_Resources.erase(m_Resources.begin() + resourceIndex);
+
+		return true;
+	}
+
+	template <typename T, typename FreeFn, typename... Args>
+	bool FreeResources(const std::string& baseName, uint32_t count, FreeFn&& freeFn, Args&&... args)
+	{
+		auto handleIt = m_ResourceHandles.find(baseName);
+		auto countIt = m_ResourceCounts.find(baseName);
+
+		if (handleIt == m_ResourceHandles.end() || countIt == m_ResourceCounts.end())
+		{
+			std::cerr << "Resource not found: " + baseName << "\n";
+			return false;
+		}
+
+		size_t startId = handleIt->second.GetId();
+		size_t endId = startId + count;
+
+		for (size_t i = startId; i < endId; ++i)
+		{
+			if (i >= m_Resources.size())
+			{
+				std::cerr << "Invalid resource index at " << i << " when attempting to free " << baseName << "\n";
+				return false;
+			}
+
+			auto resource = std::dynamic_pointer_cast<T>(m_Resources[i]);
+			if (!resource)
+			{
+				std::cerr << "Bad cast when trying to free " << baseName << "\n";
+				return false;
+			}
+
+			freeFn(resource->Get(), std::forward<Args>(args)...);
+			m_Resources[i].reset();
+		}
+
+		// Remove the freed resources from our containers
+		m_Resources.erase(m_Resources.begin() + startId, m_Resources.begin() + endId);
+		m_ResourceHandles.erase(baseName);
+		m_ResourceCounts.erase(baseName);
+
+		// Update the IDs of the remaining resources
+		for (auto& pair : m_ResourceHandles)
+		{
+			if (pair.second.GetId() > startId)
+			{
+				pair.second = ResourceHandle<RenderPassResource>(pair.second.GetId() - count);
+			}
+		}
+
+		return true;
+	}
+
+	template <typename T, typename FreeFn, typename... Args>
+	bool TryFreeResources(const std::string& baseName, FreeFn&& freeFn, Args&&... args)
+	{
+		uint32_t count = 0;
+		bool has = HasResource<T>(baseName, &count);
+		if(!has)
+		{
+			return false;
+		}
+
+		return FreeResources<T>(baseName, count, freeFn, std::forward<Args>(args)...);
 	}
 
 	template <typename T>
@@ -113,6 +245,11 @@ public:
 	T* AddPass(Args&&... args)
 	{
 		return AddPass<T>([&]() { return std::make_unique<T>(std::forward<Args>(args)...); });
+	}
+
+	void OnSwapchainResize(uint32_t width, uint32_t height)
+	{
+
 	}
 	
 	void Initialize()

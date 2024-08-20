@@ -5,23 +5,22 @@
 #include <array>
 #include <stdexcept>
 
-VulkanSwapchainRenderer::VulkanSwapchainRenderer(Window& windowRef)
+VulkanSwapchainRenderer::VulkanSwapchainRenderer(RenderGraph& graph, Window& windowRef)
 	: m_WindowRef(windowRef)
 {
-	CreateDrawCommandBuffers();
-	RecreateSwapchain();
+	RecreateSwapchain(graph);
 }
 
-void VulkanSwapchainRenderer::Shutdown()
+void VulkanSwapchainRenderer::Shutdown(RenderGraph& graph)
 {
-	m_DrawCommandBuffers.clear();
 	if(m_Swapchain != nullptr)
 	{
-		m_Swapchain->Destroy();
+		m_Swapchain->FreeAllResources(graph);
+		m_Swapchain = nullptr;
 	}
 }
 
-void VulkanSwapchainRenderer::RecreateSwapchain()
+void VulkanSwapchainRenderer::RecreateSwapchain(RenderGraph& graph)
 {
 	auto extent = m_WindowRef.GetExtent();
 	while (extent.width == 0 || extent.height == 0)
@@ -33,62 +32,46 @@ void VulkanSwapchainRenderer::RecreateSwapchain()
 
 	if (m_Swapchain == nullptr)
 	{
-		m_Swapchain = std::make_unique<VulkanSwapchain>(extent);
+		m_Swapchain = std::make_unique<VulkanSwapchain>(graph, extent);
 	}
 	else
 	{
 		std::shared_ptr<VulkanSwapchain> oldSwapChain = std::move(m_Swapchain);
-		m_Swapchain = std::make_unique<VulkanSwapchain>(extent, oldSwapChain);
+		m_Swapchain = std::make_unique<VulkanSwapchain>(graph, extent, oldSwapChain);
 
 		if (!oldSwapChain->CompareFormats(*m_Swapchain))
 			throw std::runtime_error("Swap chain imageInfo format has changed!");
 	}
 
-	m_DrawCommandBuffers.clear();
-	CreateDrawCommandBuffers();
 	if(m_RecreateSwapchainCallback)
 		m_RecreateSwapchainCallback(m_Swapchain->Width(), m_Swapchain->Height());
 
 	vkDeviceWaitIdle(VulkanContext::Get().Device());
 }
 
-void VulkanSwapchainRenderer::CreateDrawCommandBuffers()
+bool VulkanSwapchainRenderer::BeginFrame(RenderGraph& graph, uint32_t frameIndex)
 {
-	m_DrawCommandBuffers.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
-	for(int i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; ++i)
-	{
-		auto debugName = "Swapchain Draw Command Buffer " + std::to_string(i);
-		m_DrawCommandBuffers[i] = std::make_shared<VulkanCommandBuffer>(VulkanContext::Get().GraphicsCommandPool(), true, debugName);
-	}
-}
-
-std::weak_ptr<VulkanCommandBuffer> VulkanSwapchainRenderer::BeginFrame(uint32_t frameIndex)
-{
-	auto result = m_Swapchain->AcquireNextImage(frameIndex, &m_CurrentImageIndex);
+	auto result = m_Swapchain->AcquireNextImage(graph, frameIndex, &m_CurrentImageIndex);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR)
 	{
-		RecreateSwapchain();
-		return {};	// Default constructed weak ptr.
+		RecreateSwapchain(graph);
+		return false;
 	}
 	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
 	{
 		throw std::runtime_error("Failed to acquire swap chain image!");
 	}
-
-	vkResetFences(VulkanContext::Get().Device(), 1, &m_Swapchain->m_InFlightFences[frameIndex]);
-	m_DrawCommandBuffers[frameIndex]->Reset();
-	return m_DrawCommandBuffers[frameIndex];
+	return true;
 }
 
-void VulkanSwapchainRenderer::EndFrame(FrameInfo& frameInfo)
+void VulkanSwapchainRenderer::EndFrame(RenderGraph& graph, uint32_t frameIndex)
 {
-	m_Swapchain->SubmitCommandBuffer(frameInfo);
-	auto result = m_Swapchain->Present(frameInfo, &m_CurrentImageIndex);
+	auto result = m_Swapchain->Present(graph, frameIndex, &m_CurrentImageIndex);
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_WindowRef.WasWindowResized())
 	{
 		m_WindowRef.ResetWindowResizedFlag();
-		RecreateSwapchain();
+		RecreateSwapchain(graph);
 	}
 	else if (result != VK_SUCCESS)
 	{

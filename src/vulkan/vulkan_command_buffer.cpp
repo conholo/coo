@@ -16,12 +16,16 @@ VulkanCommandBuffer::VulkanCommandBuffer(VkCommandPool commandPool, bool isPrima
 	allocInfo.commandBufferCount = 1;
 
 	VK_CHECK_RESULT(vkAllocateCommandBuffers(VulkanContext::Get().Device(), &allocInfo, &m_CommandBuffer));
+	SetDebugUtilsObjectName(VulkanContext::Get().Device(), VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t )m_CommandBuffer, debugName.c_str());
 }
 
 VulkanCommandBuffer::~VulkanCommandBuffer()
 {
 	if (m_CommandBuffer != VK_NULL_HANDLE)
+	{
 		vkFreeCommandBuffers(VulkanContext::Get().Device(), m_CommandPool, 1, &m_CommandBuffer);
+		m_CommandBuffer = VK_NULL_HANDLE;
+	}
 }
 
 void VulkanCommandBuffer::Begin(VkCommandBufferUsageFlags flags)
@@ -63,7 +67,15 @@ void VulkanCommandBuffer::Submit(
 	const std::vector<VkSemaphore>& signalSemaphores,
 	VkFence fence)
 {
+	if (commandBuffers.empty())
+		throw std::runtime_error("No command buffers provided for submission");
+
+	if(fence != VK_NULL_HANDLE)
+		VK_CHECK_RESULT(vkResetFences(VulkanContext::Get().Device(), 1, &fence));
+
 	std::vector<VkCommandBuffer> vkCommandBuffers;
+	vkCommandBuffers.reserve(commandBuffers.size());
+
 	for (const auto& cb : commandBuffers)
 	{
 		if (cb->GetState() != State::Executable)
@@ -88,6 +100,21 @@ void VulkanCommandBuffer::Submit(
 
 	for (auto& cb : commandBuffers)
 		cb->m_State = State::Pending;
+}
+
+void VulkanCommandBuffer::WaitForCompletion(VkFence fence)
+{
+	if(m_State == State::Initial)
+	{
+		// Already waited on.
+		return;
+	}
+
+	// Wait for the fence to be signaled, indicating the GPU has finished execution
+	vkWaitForFences(VulkanContext::Get().Device(), 1, &fence, VK_TRUE, UINT64_MAX);
+
+	// After the fence is signaled, we can safely reset the state
+	m_State = State::Initial;
 }
 
 void VulkanCommandBuffer::ResetCommandBuffers(const std::vector<std::unique_ptr<VulkanCommandBuffer>>& commandBuffers)

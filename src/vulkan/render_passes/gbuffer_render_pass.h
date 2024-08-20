@@ -25,20 +25,21 @@ private:
 
 private:
 
-	std::vector<ResourceHandle<CommandBufferResource>> m_CommandBufferHandles;
-	std::vector<ResourceHandle<SemaphoreResource>> m_RenderCompleteSemaphoreHandles;
+	std::vector<ResourceHandle<CommandBufferResource>> m_CommandBufferHandles{};
+	std::vector<ResourceHandle<SemaphoreResource>> m_RenderCompleteSemaphoreHandles{};
+	std::vector<ResourceHandle<FenceResource>> m_ResourcesInFlightFenceHandles{};
 
-	std::vector<ResourceHandle<TextureResource>> m_PositionTextureHandles;
-	std::vector<ResourceHandle<TextureResource>> m_NormalTextureHandles;
-	std::vector<ResourceHandle<TextureResource>> m_AlbedoTextureHandles;
-	std::vector<ResourceHandle<TextureResource>> m_DepthTextureHandles;
+	std::vector<ResourceHandle<TextureResource>> m_PositionTextureHandles{};
+	std::vector<ResourceHandle<TextureResource>> m_NormalTextureHandles{};
+	std::vector<ResourceHandle<TextureResource>> m_AlbedoTextureHandles{};
+	std::vector<ResourceHandle<TextureResource>> m_DepthTextureHandles{};
 
-	std::vector<ResourceHandle<FramebufferResource>> m_FramebufferHandles;
+	std::vector<ResourceHandle<FramebufferResource>> m_FramebufferHandles{};
 
 	ResourceHandle<GraphicsPipelineObjectResource> m_PipelineHandle{};
-	ResourceHandle<RenderPassObjectResource> m_RenderPassHandle;
-	ResourceHandle<MaterialLayoutResource> m_MaterialLayoutHandle;
-	ResourceHandle<MaterialResource> m_MaterialHandle;
-	ResourceHandle<ShaderResource> m_VertexHandle;
-	ResourceHandle<ShaderResource> m_FragmentHandle;
+	ResourceHandle<RenderPassObjectResource> m_RenderPassHandle{};
+	ResourceHandle<MaterialLayoutResource> m_MaterialLayoutHandle{};
+	ResourceHandle<MaterialResource> m_MaterialHandle{};
+	ResourceHandle<ShaderResource> m_VertexHandle{};
+	ResourceHandle<ShaderResource> m_FragmentHandle{};
 };
