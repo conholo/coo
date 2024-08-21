@@ -33,11 +33,12 @@ void VulkanImGuiViewport::Initialize()
 
 void VulkanImGuiViewport::Draw(RenderGraph& graph, FrameInfo& frameInfo)
 {
-	auto& displayImage = *graph.GetResource<Image2DResource>(SwapchainImage2DResourceName, frameInfo.ImageIndex)->Get();
+	auto textureResource = graph.GetResource<TextureResource>(SceneCompositionColorAttachmentResourceName, frameInfo.ImageIndex);
+	auto& image2D = *textureResource->Get()->GetImage();
 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
 	ImGui::Begin("Viewport");
-	CalculateViewportSize(displayImage);
+	CalculateViewportSize(image2D);
 
 	ImVec2 availContentSize = ImGui::GetContentRegionAvail();
 	ImVec2 cursorPos;
@@ -51,12 +52,11 @@ void VulkanImGuiViewport::Draw(RenderGraph& graph, FrameInfo& frameInfo)
 	drawList->AddRectFilled(rectMin, rectMax, IM_COL32(0, 0, 0, 255));
 
 	ImGui::SetCursorPos(cursorPos);
-
-	displayImage.TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	textureResource->Get()->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	m_DescriptorPool->ResetPool();
 	VulkanDescriptorWriter(*m_SetLayout, *m_DescriptorPool)
-		.WriteImage(0, displayImage.GetDescriptorInfo())
+		.WriteImage(0, image2D.GetDescriptorInfo())
 		.Build(m_DescriptorSets[frameInfo.FrameIndex]);
 
 	const auto textureID = m_DescriptorSets[frameInfo.FrameIndex];
@@ -64,9 +64,10 @@ void VulkanImGuiViewport::Draw(RenderGraph& graph, FrameInfo& frameInfo)
 	ImGui::Image(
 		textureID,
 		ImVec2{ m_ViewportSize.x, m_ViewportSize.y },
-		ImVec2{ 0, 1 }, ImVec2{ 1, 0 }
+		ImVec2{ 0, 0 }, ImVec2{ 1, 1 }
  	);
-	displayImage.TransitionLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+	textureResource->Get()->TransitionLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 	ImGui::End();
 	ImGui::PopStyleVar();

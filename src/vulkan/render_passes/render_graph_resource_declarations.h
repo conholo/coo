@@ -47,10 +47,16 @@ inline static std::string LightingResourcesInFlightResourceName = "Lighting Reso
 // Swapchain Pass
 
 // Scene Composition Sub Pass
+inline static std::string SceneCompositionCommandBufferResourceName = "Scene Composition Command Buffer";
+inline static std::string SceneCompositionColorAttachmentResourceName = "Scene Composition Color Attachment";
 inline static std::string SceneCompositionFragmentShaderResourceName = "Scene Composition Fragment Shader";
 inline static std::string SceneCompositionMaterialLayoutResourceName = "Scene Composition Material Layout";
 inline static std::string SceneCompositionMaterialResourceName = "Scene Composition Material";
+inline static std::string SceneCompositionRenderPassResourceName = "Scene Composition Render Pass";
 inline static std::string SceneCompositionGraphicsPipelineResourceName = "Scene Composition Graphics Pipeline";
+inline static std::string SceneCompositionFramebufferResourceName = "Scene Composition Framebuffer";
+inline static std::string SceneCompositionRenderCompleteSemaphoreResourceName = "Scene Composition Render Complete Semaphore";
+inline static std::string SceneCompositionResourcesInFlightResourceName = "Scene Composition Resources In Flight Fence";
 
 // UI Sub Pass
 inline static std::string UIVertexShaderResourceName = "UI Vertex Shader";

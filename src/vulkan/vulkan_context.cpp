@@ -181,7 +181,10 @@ VkCommandBuffer VulkanContext::BeginSingleTimeCommands(QueueFamilyType family)
 
 void VulkanContext::EndSingleTimeCommand(VkCommandBuffer commandBuffer, QueueFamilyType family)
 {
-    vkEndCommandBuffer(commandBuffer);
+	if(commandBuffer == VK_NULL_HANDLE)
+		return;
+
+	VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -212,8 +215,7 @@ void VulkanContext::EndSingleTimeCommand(VkCommandBuffer commandBuffer, QueueFam
 	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	VkFence fence;
 	VK_CHECK_RESULT(vkCreateFence(m_LogicalDevice.Device, &fenceCreateInfo, nullptr, &fence));
-
-    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
+    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence));
 	// Wait for the fence to signal that command buffer has finished executing
 	VK_CHECK_RESULT(vkWaitForFences(m_LogicalDevice.Device, 1, &fence, VK_TRUE, std::numeric_limits<int>::max()));
 	vkDestroyFence(m_LogicalDevice.Device, fence, nullptr);

@@ -13,8 +13,6 @@ void SwapchainPass::CreateResources(RenderGraph& graph)
 	CreateSynchronizationPrimitives(graph);
 	CreateRenderPass(graph);
 	CreateFramebuffers(graph);
-
-	m_ScenePass.CreateResources(graph);
 	m_UIPass.CreateResources(graph);
 }
 
@@ -42,8 +40,6 @@ void SwapchainPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 
 		renderPass->BeginPass(cmd->GetHandle(), compositionRenderPassInfo, attachmentExtent);
 		{
-			m_ScenePass.Record(frameInfo, graph);
-			renderPass->NextSubpass(cmd->GetHandle(), VK_SUBPASS_CONTENTS_INLINE);
 			m_UIPass.Record(frameInfo, graph);
 		}
 		renderPass->EndPass(cmd->GetHandle());
@@ -68,12 +64,14 @@ void SwapchainPass::Submit(const FrameInfo& frameInfo, RenderGraph& graph)
 	imageFence->Set(resourceFence->Get());
 
 	auto swapchainRenderComplete = graph.GetResource<SemaphoreResource>(m_RenderCompleteSemaphoreHandles[frameInfo.FrameIndex]);
-	auto lightingRenderComplete = graph.GetResource<SemaphoreResource>(LightingRenderCompleteSemaphoreResourceName, frameInfo.FrameIndex);
-	std::vector<VkSemaphore> waitSemaphores = {lightingRenderComplete->Get()->GetHandle() };
+	auto sceneCompRenderComplete = graph.GetResource<SemaphoreResource>(SceneCompositionRenderCompleteSemaphoreResourceName, frameInfo.FrameIndex);
+	std::vector<VkSemaphore> waitSemaphores = {sceneCompRenderComplete->Get()->GetHandle() };
 	std::vector<VkPipelineStageFlags> waitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	std::vector<VkSemaphore> signalSemaphores = {swapchainRenderComplete->Get()->GetHandle() };
 	std::vector<VulkanCommandBuffer*> cmdBuffers = { &*cmdBufferResource->Get() };
 
+	auto sceneCompTexResource = graph.GetResource<TextureResource>(SceneCompositionColorAttachmentResourceName, frameInfo.FrameIndex);
+	sceneCompTexResource->Get()->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	VulkanCommandBuffer::Submit(
 		VulkanContext::Get().GraphicsQueue(),
 		cmdBuffers,
@@ -81,6 +79,7 @@ void SwapchainPass::Submit(const FrameInfo& frameInfo, RenderGraph& graph)
 		waitStages,
 		signalSemaphores,
 		resourceFence->Get()->GetHandle());
+	sceneCompTexResource->Get()->TransitionLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 	auto swapchainImage = graph.GetResource<Image2DResource>(SwapchainImage2DResourceName, frameInfo.ImageIndex)->Get();
 	swapchainImage->SetExpectedLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
@@ -119,7 +118,8 @@ void SwapchainPass::CreateSynchronizationPrimitives(RenderGraph& graph)
 		SwapchainRenderingCompleteSemaphoreResourceName,
 		createSemaphore);
 	m_ImageAvailableSemaphoreHandles = graph.CreateResources<SemaphoreResource>(
-		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, SwapchainImageAvailableSemaphoreResourceName,
+		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
+		SwapchainImageAvailableSemaphoreResourceName,
 		createSemaphore);
 
 	auto createFence = [](size_t index, const std::string& baseName, bool signaled, bool nullInitialize)
@@ -171,24 +171,8 @@ void SwapchainPass::CreateRenderPass(RenderGraph& graph)
 				.StoreOp = VK_ATTACHMENT_STORE_OP_STORE,
 				.InitialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 				.FinalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-				.ClearValue = {.color = {0.0f, 0.0f, 0.0f, 1.0f}},
-				.BlendAttachmentState =
-					{
-						.blendEnable = VK_TRUE,
-						.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-						.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-						.colorBlendOp = VK_BLEND_OP_ADD,
-						.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-						.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-						.alphaBlendOp = VK_BLEND_OP_ADD,
-						.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-					}
+				.ClearValue = {.color = {0.0f, 0.0f, 0.0f, 1.0f}}
 			});
-
-		// Set up sceneCompositionSubpass
-		SubpassDescription sceneCompositionSubpass;
-		sceneCompositionSubpass.ColorAttachments = {0};
-		renderPass->AddSubpass(sceneCompositionSubpass);
 
 		SubpassDescription uiSubpass;
 		uiSubpass.ColorAttachments = {0};
@@ -201,13 +185,7 @@ void SwapchainPass::CreateRenderPass(RenderGraph& graph)
 			VK_DEPENDENCY_BY_REGION_BIT);
 
 		renderPass->AddDependency(
-			0, 1,
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-			VK_DEPENDENCY_BY_REGION_BIT);
-
-		renderPass->AddDependency(
-			1, VK_SUBPASS_EXTERNAL,
+			0, VK_SUBPASS_EXTERNAL,
 			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
 			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
 			VK_DEPENDENCY_BY_REGION_BIT);

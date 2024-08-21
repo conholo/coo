@@ -77,6 +77,7 @@ public:
     VulkanGraphicsPipelineBuilder& SetMultisampling(VkSampleCountFlagBits samples);
     VulkanGraphicsPipelineBuilder& SetDepthTesting(bool enable, bool writeEnable, VkCompareOp compareOp);
     VulkanGraphicsPipelineBuilder& SetColorBlendAttachment(uint32_t attachmentIndex, bool blendEnable, VkColorComponentFlags colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT);
+    VulkanGraphicsPipelineBuilder& SetColorBlendAttachment(uint32_t attachmentIndex, VkPipelineColorBlendAttachmentState state);
     VulkanGraphicsPipelineBuilder& SetLayout(VkPipelineLayout layout);
     VulkanGraphicsPipelineBuilder& SetRenderPass(VulkanRenderPass* renderPass, uint32_t subpass = 0);
 

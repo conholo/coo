@@ -65,6 +65,7 @@ void VulkanRenderer::Initialize()
 
 	m_Graph.AddPass<GBufferPass>();
 	m_Graph.AddPass<LightingPass>();
+	m_Graph.AddPass<SceneCompositionPass>();
 	m_Graph.AddPass<SwapchainPass>();
 
 	m_Graph.Initialize();
@@ -72,6 +73,7 @@ void VulkanRenderer::Initialize()
 
 void VulkanRenderer::OnEvent(Event& event)
 {
+	m_ImGuiRenderer->OnEvent(event);
 }
 
 void VulkanRenderer::Render(FrameInfo& frameInfo)

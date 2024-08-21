@@ -28,6 +28,5 @@ private:
 	std::vector<ResourceHandle<FramebufferResource>> m_FramebufferHandles{};
 	ResourceHandle<RenderPassObjectResource> m_RenderPassHandle{};
 
-	SceneCompositionPass m_ScenePass{};
 	UIRenderPass m_UIPass{};
 };

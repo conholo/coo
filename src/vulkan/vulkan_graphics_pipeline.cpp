@@ -204,13 +204,7 @@ void VulkanGraphicsPipelineBuilder::SetupDefaultStates()
     m_DepthStencilState.depthBoundsTestEnable = VK_FALSE;
     m_DepthStencilState.stencilTestEnable = VK_FALSE;
 
-    m_ColorBlendAttachmentStates.resize(1);
-    m_ColorBlendAttachmentStates[0].blendEnable = VK_FALSE;
-    m_ColorBlendAttachmentStates[0].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-
     m_ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    m_ColorBlendState.attachmentCount = 1;
-    m_ColorBlendState.pAttachments = m_ColorBlendAttachmentStates.data();
 
 	// Viewport state sets the number of viewports and scissor used in this pipeline
 	// Overridden by the dynamic states
@@ -309,12 +303,7 @@ VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetColorBlendAttac
         bool blendEnable,
         VkColorComponentFlags colorWriteMask)
 {
-    if (attachmentIndex >= m_ColorBlendAttachmentStates.size())
-    {
-        throw std::runtime_error("Attachment index out of range");
-    }
-
-    auto& attachment = m_ColorBlendAttachmentStates[attachmentIndex];
+    auto& attachment = m_ColorBlendAttachmentStates.emplace_back();
     attachment.blendEnable = blendEnable ? VK_TRUE : VK_FALSE;
     attachment.colorWriteMask = colorWriteMask;
 
@@ -331,6 +320,13 @@ VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetColorBlendAttac
     return *this;
 }
 
+VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetColorBlendAttachment(uint32_t attachmentIndex, VkPipelineColorBlendAttachmentState state)
+{
+	auto& attachment = m_ColorBlendAttachmentStates.emplace_back();
+	attachment = state;
+	return *this;
+}
+
 VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetLayout(VkPipelineLayout layout)
 {
     m_PipelineLayout = layout;
@@ -341,6 +337,13 @@ VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetRenderPass(Vulk
 {
     m_RenderPass = renderPass->GetHandle();
     m_Subpass = subpass;
+
+	if(!m_ColorBlendAttachmentStates.empty())
+	{
+		m_ColorBlendState.attachmentCount = static_cast<uint32_t>(m_ColorBlendAttachmentStates.size());
+		m_ColorBlendState.pAttachments = m_ColorBlendAttachmentStates.data();
+		return *this;
+	}
 
     // Set up color blend attachments based on the render pass
     const auto& attachments = renderPass->GetAttachmentDescriptions();

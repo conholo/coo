@@ -41,6 +41,9 @@ private:
 	std::unique_ptr<Buffer> m_FontMemoryBuffer;
 	std::vector<ResourceHandle<BufferResource>> m_VertexBufferHandles;
 	std::vector<ResourceHandle<BufferResource>> m_IndexBufferHandles;
+	std::unique_ptr<VulkanDescriptorPool> m_DescriptorPool;
+	std::unique_ptr<VulkanDescriptorSetLayout> m_SetLayout;
+	VkDescriptorSet m_FontDescriptorSet;
 	size_t m_VertexCount{};
 	size_t m_IndexCount{};
 

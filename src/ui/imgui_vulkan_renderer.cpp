@@ -1,22 +1,26 @@
 #include "vulkan/vulkan_swapchain_renderer.h"
 
 #include "ui/imgui_vulkan_renderer.h"
-#include "core/window.h"
-#include "vulkan/render_passes/render_pass_resource.h"
-#include "vulkan/render_passes/render_graph_resource_declarations.h"
+
 #include "core/platform_path.h"
+#include "core/window.h"
+#include "vulkan/render_passes/render_graph_resource_declarations.h"
+#include "vulkan/render_passes/render_pass_resource.h"
 
 #include <GLFW/glfw3.h>
 #include <core/application.h>
 #include <imgui.h>
+#include <imgui_impl_glfw.h>
+
 #include <memory>
 
 void VulkanImGuiRenderer::Initialize(RenderGraph& graph)
 {
-	auto& swapchain = Application::Get().GetRenderer().VulkanSwapchain();
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	SetDarkThemeColors();
+
+	auto& swapchain = Application::Get().GetRenderer().VulkanSwapchain();
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.DisplaySize = ImVec2(static_cast<float>(swapchain.Width()), static_cast<float>(swapchain.Height()));
@@ -66,6 +70,24 @@ void VulkanImGuiRenderer::Initialize(RenderGraph& graph)
 	};
 
 	m_FontTextureHandle = graph.CreateResource<TextureResource>(UIFontTextureResourceName, createFontTexture);
+	auto fontTextureResource = graph.GetResource(m_FontTextureHandle);
+	VulkanDescriptorPool::Builder poolBuilder;
+	poolBuilder
+		.AddPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1)
+		.SetMaxSets(1);
+	m_DescriptorPool = poolBuilder.Build();
+
+	VulkanDescriptorSetLayout::Builder builder;
+	builder.AddDescriptor(
+		0,
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		1);
+	m_SetLayout = builder.Build();
+	VulkanDescriptorWriter(*m_SetLayout, *m_DescriptorPool)
+		.WriteImage(0, fontTextureResource->Get()->GetBaseViewDescriptorInfo())
+		.Build(m_FontDescriptorSet);
+	io.Fonts->SetTexID((ImTextureID)m_FontDescriptorSet);
 
 	// Initialize the empty buffers - these will get created and worked on in the Update function when draw lists are registered.
 	auto createNullBuffer =
@@ -87,10 +109,15 @@ void VulkanImGuiRenderer::Initialize(RenderGraph& graph)
 		UIIndexBufferResourceName,
 		createNullBuffer,
 		VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+
+	Application& app = Application::Get();
+	auto* window = static_cast<GLFWwindow*>(app.GetWindow().GetWindowPtr());
+	ImGui_ImplGlfw_InitForVulkan(window, true);
 }
 
 void VulkanImGuiRenderer::Begin()
 {
+	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 }
 
@@ -111,6 +138,16 @@ void VulkanImGuiRenderer::End(RenderGraph& graph, uint32_t frameIndex)
 			ImGui::UpdatePlatformWindows();
 			ImGui::RenderPlatformWindowsDefault();
 		}
+		Application& app = Application::Get();
+		io.DisplaySize = ImVec2((float)app.GetWindow().GetExtent().width, (float)app.GetWindow().GetExtent().height);
+
+		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+		{
+			GLFWwindow* backup_current_context = glfwGetCurrentContext();
+			ImGui::UpdatePlatformWindows();
+			ImGui::RenderPlatformWindowsDefault();
+			glfwMakeContextCurrent(backup_current_context);
+		}
 		return;
 	}
 
@@ -121,7 +158,9 @@ void VulkanImGuiRenderer::End(RenderGraph& graph, uint32_t frameIndex)
 	{
 		// First free any resources from the existing buffer.
 		if(vbo->GetBuffer() != VK_NULL_HANDLE)
+		{
 			vbo->Destroy();
+		}
 
 		vbo->Initialize(
 			vertexBufferSize,
@@ -129,6 +168,8 @@ void VulkanImGuiRenderer::End(RenderGraph& graph, uint32_t frameIndex)
 			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 		vbo->Map();
+
+		//m_VertexCount = imDrawData->TotalVtxCount;
 	}
 
 	ResourceHandle<BufferResource> eboHandle = m_IndexBufferHandles[frameIndex];
@@ -138,7 +179,9 @@ void VulkanImGuiRenderer::End(RenderGraph& graph, uint32_t frameIndex)
 	{
 		// First free any resources from the existing buffer.
 		if(ebo->GetBuffer() != VK_NULL_HANDLE)
+		{
 			ebo->Destroy();
+		}
 
 		ebo->Initialize(
 			indexBufferSize,
@@ -146,6 +189,7 @@ void VulkanImGuiRenderer::End(RenderGraph& graph, uint32_t frameIndex)
 			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 		ebo->Map();
+		//m_IndexCount = imDrawData->TotalIdxCount;
 	}
 
 	// Upload data
@@ -172,10 +216,22 @@ void VulkanImGuiRenderer::End(RenderGraph& graph, uint32_t frameIndex)
 		ImGui::UpdatePlatformWindows();
 		ImGui::RenderPlatformWindowsDefault();
 	}
+	Application& app = Application::Get();
+
+	io.DisplaySize = ImVec2((float)app.GetWindow().GetExtent().width, (float)app.GetWindow().GetExtent().height);
+
+	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		GLFWwindow* backup_current_context = glfwGetCurrentContext();
+		ImGui::UpdatePlatformWindows();
+		ImGui::RenderPlatformWindowsDefault();
+		glfwMakeContextCurrent(backup_current_context);
+	}
 }
 
 void VulkanImGuiRenderer::OnEvent(Event& e) const
 {
+
 	if (m_BlockEvents)
 	{
 		ImGuiIO& io = ImGui::GetIO();
@@ -228,5 +284,6 @@ void VulkanImGuiRenderer::Shutdown(RenderGraph& graph)
 
 	graph.TryFreeResources<BufferResource>(UIVertexBufferResourceName, freeBuffer);
 	graph.TryFreeResources<BufferResource>(UIIndexBufferResourceName, freeBuffer);
+	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
 }

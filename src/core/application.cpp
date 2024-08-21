@@ -110,6 +110,7 @@ void Application::OnEvent(Event& event)
     EventDispatcher dispatcher(event);
     dispatcher.Dispatch<WindowClosedEvent>(BIND_FN(Application::OnWindowClose));
     dispatcher.Dispatch<WindowResizedEvent>(BIND_FN(Application::OnWindowResize));
+
 	m_Renderer->OnEvent(event);
     m_Camera.OnEvent(event);
 }

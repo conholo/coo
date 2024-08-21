@@ -61,6 +61,7 @@ public:
 
     void BindPushConstants(VkCommandBuffer commandBuffer);
 
+	VkDescriptorSet GetDescriptorSetAt(uint32_t frameIndex, uint32_t index) { return m_DescriptorSets[frameIndex][index]; }
     VkPipelineLayout GetPipelineLayout() const { return m_Layout->GetPipelineLayout(); }
     std::shared_ptr<VulkanMaterial> Clone() const;
 
