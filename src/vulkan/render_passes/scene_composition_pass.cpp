@@ -24,7 +24,7 @@ void SceneCompositionPass::Record(const FrameInfo& frameInfo, RenderGraph& graph
 {
 	ResourceHandle<TextureResource> colorAttachmentHandle = m_ColorAttachmentHandles[frameInfo.FrameIndex];
 	auto* colorAttachmentResource = graph.GetResource<TextureResource>(colorAttachmentHandle);
-	colorAttachmentResource->Get()->UpdateState(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	colorAttachmentResource->Get()->TransitionLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 	auto* lightingColorAttachment = graph.GetResource<TextureResource>(LightingColorAttachmentResourceName, frameInfo.FrameIndex);
 
@@ -48,7 +48,6 @@ void SceneCompositionPass::Record(const FrameInfo& frameInfo, RenderGraph& graph
 
 	cmd->Begin();
 	{
-		colorAttachmentResource->Get()->UpdateState(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 		VkRenderPassBeginInfo sceneCompositionRenderPassInfo{};
 		sceneCompositionRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		sceneCompositionRenderPassInfo.renderPass = renderPass->GetHandle();

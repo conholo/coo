@@ -2,6 +2,7 @@
 
 #include "event/event.h"
 #include "event/window_event.h"
+#include "layer_stack.h"
 #include "vulkan/vulkan_renderer.h"
 
 #include <memory>
@@ -28,6 +29,11 @@ private:
     std::unique_ptr<VulkanRenderer> m_Renderer;
     std::unique_ptr<Scene> m_Scene;
     Camera m_Camera;
+	LayerStack* m_LayerStack;
+
+	RenderGraph m_Graph;
+	std::unique_ptr<VulkanImGuiRenderer> m_ImGuiRenderer;
+	std::unique_ptr<VulkanImGuiViewport> m_Viewport;
 
 	bool m_ApplicationIsRunning = true;
 	inline static Application* s_Application = nullptr;

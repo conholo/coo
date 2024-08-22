@@ -4,6 +4,9 @@
 #include "engine_utils.h"
 #include "platform_path.h"
 
+#include <imgui.h>
+#include <ui/imgui_vulkan_dock_space.h>
+
 #include <chrono>
 
 void Application::CreateGameObjects(Scene& scene, VulkanRenderer& renderer)
@@ -61,8 +64,15 @@ Application::Application()
     m_Window->SetEventCallback(BIND_FN(Application::OnEvent));
     VulkanContext::Initialize("coo", 1.0, m_Window.get());
 
-    m_Renderer = std::make_unique<VulkanRenderer>(*m_Window);
-    m_Renderer->Initialize();
+	m_Graph = RenderGraph();
+	m_Renderer = std::make_unique<VulkanRenderer>(*m_Window, m_Graph);
+	m_Renderer->Initialize();
+
+	m_ImGuiRenderer = std::make_unique<VulkanImGuiRenderer>();
+	m_ImGuiRenderer->Initialize(m_Graph);
+
+	m_Viewport = std::make_unique<VulkanImGuiViewport>();
+	m_Viewport->Initialize(m_Graph);
 
     m_Scene = std::make_unique<Scene>();
     CreateGameObjects(*m_Scene, *m_Renderer);
@@ -99,6 +109,21 @@ void Application::Run()
             .ActiveScene = *m_Scene,
             .Cam = m_Camera
         };
+
+		m_ImGuiRenderer->StartRecording();
+		{
+			ImGuiVulkanDockSpace::Begin();
+			m_Viewport->Draw(m_Graph, frameInfo);
+
+			ImGui::Begin("Test");
+			ImGui::Text("Hello");
+			ImGui::End();
+			ImGui::ShowDemoWindow();
+
+			ImGuiVulkanDockSpace::End();
+		}
+		m_ImGuiRenderer->EndRecording(m_Graph, frameInfo.FrameIndex);
+
 		m_Renderer->Render(frameInfo);
     }
 
@@ -111,7 +136,9 @@ void Application::OnEvent(Event& event)
     dispatcher.Dispatch<WindowClosedEvent>(BIND_FN(Application::OnWindowClose));
     dispatcher.Dispatch<WindowResizedEvent>(BIND_FN(Application::OnWindowResize));
 
+	if(event.Handled) return;
 	m_Renderer->OnEvent(event);
+	if(event.Handled) return;
     m_Camera.OnEvent(event);
 }
 

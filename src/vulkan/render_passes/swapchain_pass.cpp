@@ -80,7 +80,6 @@ void SwapchainPass::Submit(const FrameInfo& frameInfo, RenderGraph& graph)
 		waitStages,
 		signalSemaphores,
 		resourceFence->Get()->GetHandle());
-	sceneCompTexResource->Get()->TransitionLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 	auto swapchainImage = graph.GetResource<Image2DResource>(SwapchainImage2DResourceName, frameInfo.ImageIndex)->Get();
 	swapchainImage->SetExpectedLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);

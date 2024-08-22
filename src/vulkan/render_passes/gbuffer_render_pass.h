@@ -7,6 +7,7 @@ class GBufferPass : public RenderPass
 {
 public:
 	GBufferPass() = default;
+	~GBufferPass() override = default;
 	void CreateResources(RenderGraph& graph) override;
 	void Record(const FrameInfo& frameInfo, RenderGraph& graph) override;
 	void Submit(const FrameInfo& frameInfo, RenderGraph& graph) override;

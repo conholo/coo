@@ -8,11 +8,10 @@
 #include "vulkan/render_passes/render_graph_resource_declarations.h"
 
 #include <imgui.h>
-#include <imgui_impl_vulkan.h>
 #include <vulkan/vulkan.h>
 #include "vulkan/vulkan_descriptors.h"
 
-void VulkanImGuiViewport::Initialize()
+void VulkanImGuiViewport::Initialize(RenderGraph& graph)
 {
 	VulkanDescriptorPool::Builder poolBuilder;
 	poolBuilder
@@ -72,8 +71,6 @@ void VulkanImGuiViewport::Draw(RenderGraph& graph, FrameInfo& frameInfo)
 		ImVec2{ m_ViewportSize.x, m_ViewportSize.y },
 		ImVec2{ 0, 0 }, ImVec2{ 1, 1 }
  	);
-
-	textureResource->Get()->TransitionLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 	ImGui::End();
 	ImGui::PopStyleVar();

@@ -115,14 +115,14 @@ void VulkanImGuiRenderer::Initialize(RenderGraph& graph)
 	ImGui_ImplGlfw_InitForVulkan(window, true);
 }
 
-void VulkanImGuiRenderer::Begin()
+void VulkanImGuiRenderer::StartRecording()
 {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 }
 
 // Update vertex and index buffer containing the imGui elements when required
-void VulkanImGuiRenderer::End(RenderGraph& graph, uint32_t frameIndex)
+void VulkanImGuiRenderer::EndRecording(RenderGraph& graph, uint32_t frameIndex)
 {
 	ImGui::Render();
 	ImDrawData* imDrawData = ImGui::GetDrawData();
@@ -231,7 +231,6 @@ void VulkanImGuiRenderer::End(RenderGraph& graph, uint32_t frameIndex)
 
 void VulkanImGuiRenderer::OnEvent(Event& e) const
 {
-
 	if (m_BlockEvents)
 	{
 		ImGuiIO& io = ImGui::GetIO();

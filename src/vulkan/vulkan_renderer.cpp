@@ -10,33 +10,28 @@
 #include "render_passes/render_graph.h"
 #include "render_passes/render_graph_resource_declarations.h"
 #include "vulkan_utils.h"
-
 #include <imgui.h>
-#include <ui/imgui_vulkan_dock_space.h>
 
-VulkanRenderer::VulkanRenderer(Window& window) : m_WindowRef(window)
+VulkanRenderer::VulkanRenderer(Window& window, RenderGraph& graph)
+	: m_WindowRef(window), m_GraphRef(graph)
 {
-	m_SwapchainRenderer = std::make_shared<VulkanSwapchainRenderer>(m_Graph, window);
+}
+
+void VulkanRenderer::Shutdown()
+{
+	m_SwapchainRenderer->Shutdown(m_GraphRef);
+	m_SwapchainRenderer = nullptr;
+}
+
+void VulkanRenderer::Initialize()
+{
+	m_SwapchainRenderer = std::make_shared<VulkanSwapchainRenderer>(m_GraphRef, m_WindowRef);
 	m_SwapchainRenderer->SetOnRecreateSwapchainCallback(
 		[this](uint32_t width, uint32_t height)
 		{
 			m_CurrentFrameIndex = 0;
 			OnSwapchainRecreate(width, height);
 		});
-}
-
-void VulkanRenderer::Shutdown()
-{
-	m_SwapchainRenderer->Shutdown(m_Graph);
-	m_SwapchainRenderer = nullptr;
-}
-
-void VulkanRenderer::Initialize()
-{
-	m_ImGuiRenderer = std::make_shared<VulkanImGuiRenderer>();
-	m_ImGuiRenderer->Initialize(m_Graph);
-	m_ImGuiViewport = std::make_unique<VulkanImGuiViewport>();
-	m_ImGuiViewport->Initialize();
 
 	// Create Global Resources
 	auto createGlobalUbos =
@@ -51,7 +46,7 @@ void VulkanRenderer::Initialize()
 		uboBuffer->Map();
 		return std::make_shared<BufferResource>(resourceName, uboBuffer);
 	};
-	m_Graph.CreateResources<BufferResource>(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, GlobalUniformBufferResourceName, createGlobalUbos);
+	m_GraphRef.CreateResources<BufferResource>(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, GlobalUniformBufferResourceName, createGlobalUbos);
 
 	auto createShader =
 		[](const std::string& resourceBaseName, const std::string& filePath, ShaderType shaderType)
@@ -61,24 +56,23 @@ void VulkanRenderer::Initialize()
 	};
 	auto shaderDirectory = FileSystemUtil::GetShaderDirectory();
 	auto fsqVertPath = FileSystemUtil::PathToString(shaderDirectory / "fsq.vert");
-	m_Graph.CreateResource<ShaderResource>(FullScreenQuadShaderResourceName, createShader, fsqVertPath, ShaderType::Vertex);
+	m_GraphRef.CreateResource<ShaderResource>(FullScreenQuadShaderResourceName, createShader, fsqVertPath, ShaderType::Vertex);
 
-	m_Graph.AddPass<GBufferPass>();
-	m_Graph.AddPass<LightingPass>();
-	m_Graph.AddPass<SceneCompositionPass>();
-	m_Graph.AddPass<SwapchainPass>();
+	m_GraphRef.AddPass<GBufferPass>();
+	m_GraphRef.AddPass<LightingPass>();
+	m_GraphRef.AddPass<SceneCompositionPass>();
+	m_GraphRef.AddPass<SwapchainPass>();
 
-	m_Graph.Initialize();
+	m_GraphRef.Initialize();
 }
 
 void VulkanRenderer::OnEvent(Event& event)
 {
-	m_ImGuiRenderer->OnEvent(event);
 }
 
 void VulkanRenderer::Render(FrameInfo& frameInfo)
 {
-	bool success = m_SwapchainRenderer->BeginFrame(m_Graph, m_CurrentFrameIndex);
+	bool success = m_SwapchainRenderer->BeginFrame(m_GraphRef, m_CurrentFrameIndex);
 	{
 		if (!success)
 			return;
@@ -90,39 +84,24 @@ void VulkanRenderer::Render(FrameInfo& frameInfo)
 			.InvProjection = frameInfo.Cam.GetInvProjection(),
 			.CameraPosition = glm::vec4(frameInfo.Cam.GetPosition(), 1.0)};
 
-		auto uboResource = m_Graph.GetResource<BufferResource>(GlobalUniformBufferResourceName, frameInfo.FrameIndex);
+		auto uboResource = m_GraphRef.GetResource<BufferResource>(GlobalUniformBufferResourceName, frameInfo.FrameIndex);
 		uboResource->Get()->WriteToBuffer(&ubo);
 		uboResource->Get()->Flush();
 		frameInfo.ImageIndex = m_SwapchainRenderer->m_CurrentImageIndex;
-
-		m_ImGuiRenderer->Begin();
-		{
-			ImGuiVulkanDockSpace::Begin();
-			m_ImGuiViewport->Draw(m_Graph, frameInfo);
-
-			ImGui::Begin("Test");
-			ImGui::Text("Hello");
-			ImGui::End();
-			ImGui::ShowDemoWindow();
-
-			ImGuiVulkanDockSpace::End();
-		}
-		m_ImGuiRenderer->End(m_Graph, frameInfo.FrameIndex);
-
-		m_Graph.Execute(frameInfo);
+		m_GraphRef.Execute(frameInfo);
 	}
 
-	m_SwapchainRenderer->EndFrame(m_Graph, m_CurrentFrameIndex);
+	m_SwapchainRenderer->EndFrame(m_GraphRef, m_CurrentFrameIndex);
 	m_CurrentFrameIndex = (m_CurrentFrameIndex + 1) % VulkanSwapchain::MAX_FRAMES_IN_FLIGHT;
 }
 
 void VulkanRenderer::PrepareGameObjectForRendering(GameObject& gameObjectRef)
 {
-	auto objectMaterialResource = m_Graph.GetResource<MaterialResource>(GBufferMaterialResourceName);
+	auto objectMaterialResource = m_GraphRef.GetResource<MaterialResource>(GBufferMaterialResourceName);
 	gameObjectRef.Material = objectMaterialResource->Get()->Clone();
 }
 
 void VulkanRenderer::OnSwapchainRecreate(uint32_t width, uint32_t height)
 {
-	m_Graph.OnSwapchainResize(width, height);
+	m_GraphRef.OnSwapchainResize(width, height);
 }

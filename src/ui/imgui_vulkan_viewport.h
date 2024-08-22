@@ -15,7 +15,7 @@ class VulkanImGuiViewport
 {
 public:
 	VulkanImGuiViewport() = default;
-	void Initialize();
+	void Initialize(RenderGraph& graph);
 	void Draw(RenderGraph& graph, FrameInfo& frameInfo);
 	bool ShouldBlockEvents() const { return !m_ViewportFocused && !m_ViewportHovered; }
 

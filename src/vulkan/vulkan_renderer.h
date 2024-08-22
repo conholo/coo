@@ -16,7 +16,7 @@ class GameObject;
 class VulkanRenderer
 {
 public:
-    explicit VulkanRenderer(Window& windowRef);
+    VulkanRenderer(Window& windowRef, RenderGraph& graph);
     ~VulkanRenderer() = default;
 
     void Initialize();
@@ -29,15 +29,12 @@ public:
 	uint32_t GetCurrentFrameIndex() const { return m_CurrentFrameIndex; }
 
     VulkanSwapchain& VulkanSwapchain() const { return m_SwapchainRenderer->GetSwapchain(); }
-	VulkanImGuiViewport& GetImGuiViewport() { return *m_ImGuiViewport; }
 	VulkanSwapchainRenderer& GetSwapchainRenderer() { return *m_SwapchainRenderer; }
 
 private:
-	RenderGraph m_Graph;
+	RenderGraph& m_GraphRef;
     Window& m_WindowRef;
-    std::shared_ptr<VulkanImGuiRenderer> m_ImGuiRenderer;
     std::shared_ptr<VulkanSwapchainRenderer> m_SwapchainRenderer;
-    std::unique_ptr<VulkanImGuiViewport> m_ImGuiViewport;
 
 	uint32_t m_CurrentFrameIndex{};
     void OnSwapchainRecreate(uint32_t width, uint32_t height);

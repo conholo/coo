@@ -21,8 +21,8 @@ public:
 	void Initialize(RenderGraph& graph);
 	void Shutdown(RenderGraph& graph);
 
-	void Begin();
-	void End(RenderGraph& graph, uint32_t frameIndex);
+	void StartRecording();
+	void EndRecording(RenderGraph& graph, uint32_t frameIndex);
 
 	void OnEvent(Event& e) const;
 	void BlockEvents(bool block) { m_BlockEvents = block; }
