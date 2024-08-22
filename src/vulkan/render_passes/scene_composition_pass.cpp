@@ -5,6 +5,7 @@
 #include "vulkan/vulkan_semaphore.h"
 #include "vulkan/vulkan_fence.h"
 #include "render_graph.h"
+#include "render_graph_resource_declarations.h"
 
 void SceneCompositionPass::CreateResources(RenderGraph& graph)
 {

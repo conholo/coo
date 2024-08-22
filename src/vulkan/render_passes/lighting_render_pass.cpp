@@ -1,5 +1,13 @@
 #include "lighting_render_pass.h"
+#include "render_graph.h"
+#include "core/application.h"
+#include "core/platform_path.h"
 #include "render_graph_resource_declarations.h"
+#include "render_graph_resource_declarations.h"
+#include "vulkan/vulkan_fence.h"
+#include "vulkan/vulkan_semaphore.h"
+#include "vulkan/vulkan_render_pass.h"
+#include "vulkan/vulkan_framebuffer.h"
 
 void LightingPass::CreateResources(RenderGraph& graph)
 {

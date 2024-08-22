@@ -2,8 +2,14 @@
 
 #include <glm/vec2.hpp>
 #include <memory>
+#include <vector>
+#include <vulkan/vulkan.h>
 
+class RenderGraph;
+struct FrameInfo;
 class VulkanImage2D;
+class VulkanDescriptorPool;
+class VulkanDescriptorSetLayout;
 
 class VulkanImGuiViewport
 {

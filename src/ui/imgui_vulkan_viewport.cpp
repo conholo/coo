@@ -1,10 +1,16 @@
 #include "imgui_vulkan_viewport.h"
 
+#include "core/frame_info.h"
 #include "vulkan/vulkan_image.h"
+#include "vulkan/vulkan_swapchain.h"
+#include "vulkan/render_passes/render_pass_resource.h"
+#include "vulkan/render_passes/render_graph.h"
+#include "vulkan/render_passes/render_graph_resource_declarations.h"
 
 #include <imgui.h>
 #include <imgui_impl_vulkan.h>
 #include <vulkan/vulkan.h>
+#include "vulkan/vulkan_descriptors.h"
 
 void VulkanImGuiViewport::Initialize()
 {

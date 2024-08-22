@@ -2,7 +2,7 @@
 
 #include "render_pass_resource.h"
 
-class FrameInfo;
+struct FrameInfo;
 class RenderGraph;
 
 class RenderPass

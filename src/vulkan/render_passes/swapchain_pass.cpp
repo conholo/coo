@@ -1,5 +1,6 @@
 #include "swapchain_pass.h"
 #include "render_graph.h"
+#include "core/application.h"
 #include "render_graph_resource_declarations.h"
 #include "core/frame_info.h"
 #include "vulkan/vulkan_fence.h"

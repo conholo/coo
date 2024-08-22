@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <glm/gtc/matrix_transform.hpp>
 
-class FrameInfo;
+struct FrameInfo;
 class Scene;
 
 struct TransformComponent

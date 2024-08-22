@@ -8,6 +8,7 @@
 #include "vulkan_framebuffer.h"
 #include "vulkan_render_pass.h"
 #include "vulkan_texture.h"
+#include "vulkan_semaphore.h"
 #include "vulkan_utils.h"
 
 #include <core/application.h>

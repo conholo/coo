@@ -4,7 +4,7 @@
 #include <memory>
 #include <vector>
 
-class FrameInfo;
+struct FrameInfo;
 class RenderGraph;
 class VulkanSwapchain
 {

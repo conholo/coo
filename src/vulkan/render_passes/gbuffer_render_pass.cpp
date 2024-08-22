@@ -1,9 +1,11 @@
 #include "gbuffer_render_pass.h"
 
+#include "core/application.h"
 #include "render_graph.h"
 #include "render_graph_resource_declarations.h"
 #include "vulkan/vulkan_semaphore.h"
 #include "vulkan/vulkan_fence.h"
+#include "vulkan/vulkan_framebuffer.h"
 
 #include <core/platform_path.h>
 

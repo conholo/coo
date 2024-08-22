@@ -48,7 +48,7 @@ set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CM
 if(WIN32)
     include(cmake/Windows.cmake)
 elseif(UNIX AND APPLE)
-    include(cmake/Mac.cmake)
+    include(cmake/MacOS.cmake)
 elseif(UNIX AND NOT APPLE)
     include(cmake/Linux.cmake)  # You may need to create this file for Linux support
 else()
