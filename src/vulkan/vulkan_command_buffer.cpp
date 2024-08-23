@@ -7,7 +7,7 @@
 #include <utility>
 
 VulkanCommandBuffer::VulkanCommandBuffer(VkCommandPool commandPool, bool isPrimary, std::string debugName)
-	:  m_CommandPool(commandPool), m_State(State::Initial), m_DebugName(std::move(debugName))
+	: m_CommandPool(commandPool), m_State(State::Initial), m_DebugName(std::move(debugName))
 {
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -16,7 +16,8 @@ VulkanCommandBuffer::VulkanCommandBuffer(VkCommandPool commandPool, bool isPrima
 	allocInfo.commandBufferCount = 1;
 
 	VK_CHECK_RESULT(vkAllocateCommandBuffers(VulkanContext::Get().Device(), &allocInfo, &m_CommandBuffer));
-	SetDebugUtilsObjectName(VulkanContext::Get().Device(), VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t )m_CommandBuffer, debugName.c_str());
+	SetDebugUtilsObjectName(
+		VulkanContext::Get().Device(), VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t) m_CommandBuffer, debugName.c_str());
 }
 
 VulkanCommandBuffer::~VulkanCommandBuffer()
@@ -59,18 +60,14 @@ void VulkanCommandBuffer::Reset()
 	m_State = State::Initial;
 }
 
-void VulkanCommandBuffer::Submit(
-	VkQueue queue,
-	const std::vector<VulkanCommandBuffer*>& commandBuffers,
-	const std::vector<VkSemaphore>& waitSemaphores,
-	const std::vector<VkPipelineStageFlags>& waitStages,
-	const std::vector<VkSemaphore>& signalSemaphores,
-	VkFence fence)
+void VulkanCommandBuffer::Submit(VkQueue queue, const std::vector<VulkanCommandBuffer*>& commandBuffers,
+	const std::vector<VkSemaphore>& waitSemaphores, const std::vector<VkPipelineStageFlags>& waitStages,
+	const std::vector<VkSemaphore>& signalSemaphores, VkFence fence)
 {
 	if (commandBuffers.empty())
 		throw std::runtime_error("No command buffers provided for submission");
 
-	if(fence != VK_NULL_HANDLE)
+	if (fence != VK_NULL_HANDLE)
 		VK_CHECK_RESULT(vkResetFences(VulkanContext::Get().Device(), 1, &fence));
 
 	std::vector<VkCommandBuffer> vkCommandBuffers;
@@ -104,7 +101,7 @@ void VulkanCommandBuffer::Submit(
 
 void VulkanCommandBuffer::WaitForCompletion(VkFence fence)
 {
-	if(m_State == State::Initial)
+	if (m_State == State::Initial)
 	{
 		// Already waited on.
 		return;
@@ -127,4 +124,50 @@ void VulkanCommandBuffer::ResetCommandBuffers(const std::vector<std::unique_ptr<
 		VK_CHECK_RESULT(vkResetCommandBuffer(cb->m_CommandBuffer, 0));
 		cb->m_State = State::Initial;
 	}
+}
+
+VkResult VulkanCommandBuffer::InterruptAndReset(VkFence fence, bool recreate)
+{
+	VkDevice device = VulkanContext::Get().Device();
+
+	// 1. Wait for any ongoing GPU operations to complete
+	VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
+	VK_CHECK_RESULT(vkResetFences(device, 1, &fence));
+
+	// 2. End the command buffer if it's in recording state
+	if (m_State == State::Recording)
+	{
+		End();
+	}
+
+	// 3. Reset the command buffer
+	Reset();
+
+	// 4. If requested, recreate the command buffer
+	if (recreate)
+	{
+		// Store the properties of the existing command buffer
+		bool isPrimary = (m_CommandBuffer != VK_NULL_HANDLE);
+		std::string debugName = m_DebugName;
+
+		// Free the existing command buffer
+		if (m_CommandBuffer != VK_NULL_HANDLE)
+		{
+			vkFreeCommandBuffers(device, m_CommandPool, 1, &m_CommandBuffer);
+			m_CommandBuffer = VK_NULL_HANDLE;
+		}
+
+		// Allocate a new command buffer
+		VkCommandBufferAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocInfo.commandPool = m_CommandPool;
+		allocInfo.level = isPrimary ? VK_COMMAND_BUFFER_LEVEL_PRIMARY : VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+		allocInfo.commandBufferCount = 1;
+
+		VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &allocInfo, &m_CommandBuffer));
+		SetDebugUtilsObjectName(device, VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t) m_CommandBuffer, debugName.c_str());
+	}
+
+	m_State = State::Initial;
+	return VK_SUCCESS;
 }

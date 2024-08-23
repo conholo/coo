@@ -37,6 +37,7 @@ public:
 		const std::vector<VkSemaphore>& signalSemaphores,
 		VkFence fence = VK_NULL_HANDLE);
 	static void ResetCommandBuffers(const std::vector<std::unique_ptr<VulkanCommandBuffer>>& commandBuffers);
+	VkResult InterruptAndReset(VkFence fence, bool recreate = false);
 
 	bool IsRecording() const { return m_State == State::Recording; }
 	VkCommandBuffer GetHandle() const { return m_CommandBuffer; }

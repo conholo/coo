@@ -3,11 +3,12 @@
 #include "core/application.h"
 #include "render_graph.h"
 #include "render_graph_resource_declarations.h"
-#include "vulkan/vulkan_semaphore.h"
 #include "vulkan/vulkan_fence.h"
 #include "vulkan/vulkan_framebuffer.h"
+#include "vulkan/vulkan_semaphore.h"
 
 #include <core/platform_path.h>
+#include <vulkan/vulkan_utils.h>
 
 void GBufferPass::CreateResources(RenderGraph& graph)
 {
@@ -401,7 +402,6 @@ void GBufferPass::CreateFramebuffers(RenderGraph& graph)
 			const std::vector<ResourceHandle<TextureResource>>& albedoTextureHandles,
 			const std::vector<ResourceHandle<TextureResource>>& depthTextureHandles)
 	{
-
 		auto positionView = graph.GetResource(positionTextureHandles[index])->Get()->GetImage()->GetView();
 		auto normalView = graph.GetResource(normalTextureHandles[index])->Get()->GetImage()->GetView();
 		auto albedoView = graph.GetResource(albedoTextureHandles[index])->Get()->GetImage()->GetView();
@@ -431,4 +431,58 @@ void GBufferPass::CreateFramebuffers(RenderGraph& graph)
 		m_NormalTextureHandles,
 		m_AlbedoTextureHandles,
 		m_DepthTextureHandles);
+}
+
+void GBufferPass::OnSwapchainResize(uint32_t width, uint32_t height, RenderGraph& graph)
+{
+	for (auto cmdBufferHandle : m_CommandBufferHandles)
+	{
+		auto cmdResource = graph.GetResource<CommandBufferResource>(cmdBufferHandle);
+
+		VkFenceCreateInfo fenceCreateInfo{};
+		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		VkFence fence;
+		VK_CHECK_RESULT(vkCreateFence(VulkanContext::Get().Device(), &fenceCreateInfo, nullptr, &fence));
+		VK_CHECK_RESULT(cmdResource->Get()->InterruptAndReset(fence, true));
+		vkDestroyFence(VulkanContext::Get().Device(), fence, nullptr);
+	}
+
+	auto freeFences = [](const std::shared_ptr<VulkanFence>& fence){};
+	graph.TryFreeResources<FenceResource>(GBufferResourcesInFlightResourceName, freeFences);
+	auto freeSemaphores = [](const std::shared_ptr<VulkanSemaphore>& semaphore){};
+	graph.TryFreeResources<SemaphoreResource>(GBufferRenderCompleteSemaphoreResourceName, freeSemaphores);
+	CreateSynchronizationPrimitives(graph);
+
+	for(auto albedoHandle: m_AlbedoTextureHandles)
+	{
+		auto textureResource = graph.GetResource(albedoHandle);
+		textureResource->Get()->Resize(width, height);
+	}
+
+	for(auto positionHandle: m_PositionTextureHandles)
+	{
+		auto textureResource = graph.GetResource(positionHandle);
+		textureResource->Get()->Resize(width, height);
+	}
+
+	for(auto normalHandle: m_NormalTextureHandles)
+	{
+		auto textureResource = graph.GetResource(normalHandle);
+		textureResource->Get()->Resize(width, height);
+	}
+
+	for(auto depthHandle : m_DepthTextureHandles)
+	{
+		auto textureResource = graph.GetResource(depthHandle);
+		textureResource->Get()->Resize(width, height);
+	}
+
+	graph.TryFreeResources<RenderPassObjectResource>(GBufferRenderPassResourceName,  [](const std::shared_ptr<VulkanRenderPass>& renderPass){});
+	CreateRenderPass(graph);
+
+	graph.TryFreeResources<GraphicsPipelineObjectResource>(GBufferGraphicsPipelineResourceName,  [](const std::shared_ptr<VulkanGraphicsPipeline>& graphicsPipeline){});
+	CreateGraphicsPipeline(graph);
+
+	graph.TryFreeResources<FramebufferResource>(GBufferFramebufferResourceName,  [](const std::shared_ptr<VulkanFramebuffer>& framebuffer){});
+	CreateFramebuffers(graph);
 }

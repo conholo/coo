@@ -221,3 +221,9 @@ void UIRenderPass::CreateGraphicsPipeline(RenderGraph& graph)
 		vertShaderResource->Get().get(),
 		fragShaderResource->Get().get());
 }
+
+void UIRenderPass::OnSwapchainResize(uint32_t width, uint32_t height, RenderGraph& graph)
+{
+	graph.TryFreeResources<GraphicsPipelineObjectResource>(SceneCompositionGraphicsPipelineResourceName,  [](const std::shared_ptr<VulkanGraphicsPipeline>& graphicsPipeline){});
+	CreateGraphicsPipeline(graph);
+}

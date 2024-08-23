@@ -9,6 +9,7 @@ public:
 	void CreateResources(RenderGraph& graph) override;
 	void Record(const FrameInfo& frameInfo, RenderGraph& graph) override;
 	void Submit(const FrameInfo& frameInfo, RenderGraph& graph) override {}
+	void OnSwapchainResize(uint32_t width, uint32_t height, RenderGraph& graph) override;
 
 private:
 	void CreateShaders(RenderGraph& graph);

@@ -249,7 +249,10 @@ public:
 
 	void OnSwapchainResize(uint32_t width, uint32_t height)
 	{
-
+		for(auto& pass: m_Passes)
+		{
+			pass->OnSwapchainResize(width, height, *this);
+		}
 	}
 	
 	void Initialize()

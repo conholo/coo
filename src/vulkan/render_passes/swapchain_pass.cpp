@@ -229,3 +229,32 @@ void SwapchainPass::CreateFramebuffers(RenderGraph& graph)
 		renderPassResource->Get().get(),
 		SwapchainImage2DResourceName);
 }
+
+void SwapchainPass::OnSwapchainResize(uint32_t width, uint32_t height, RenderGraph& graph)
+{
+	for (auto cmdBufferHandle : m_CommandBufferHandles)
+	{
+		auto cmdResource = graph.GetResource(cmdBufferHandle);
+
+		VkFenceCreateInfo fenceCreateInfo{};
+		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		VkFence fence;
+		VK_CHECK_RESULT(vkCreateFence(VulkanContext::Get().Device(), &fenceCreateInfo, nullptr, &fence));
+		VK_CHECK_RESULT(cmdResource->Get()->InterruptAndReset(fence, true));
+		vkDestroyFence(VulkanContext::Get().Device(), fence, nullptr);
+	}
+
+	auto freeFences = [](const std::shared_ptr<VulkanFence>& fence){};
+	graph.TryFreeResources<FenceResource>(SwapchainResourcesInFlightFenceResourceName, freeFences);
+	auto freeSemaphores = [](const std::shared_ptr<VulkanSemaphore>& semaphore){};
+	graph.TryFreeResources<SemaphoreResource>(SwapchainRenderingCompleteSemaphoreResourceName, freeSemaphores);
+	CreateSynchronizationPrimitives(graph);
+
+	graph.TryFreeResources<RenderPassObjectResource>(SwapchainRenderPassResourceName,  [](const std::shared_ptr<VulkanRenderPass>& renderPass){});
+	CreateRenderPass(graph);
+
+	graph.TryFreeResources<FramebufferResource>(SwapchainFramebufferResourceName,  [](const std::shared_ptr<VulkanFramebuffer>& framebuffer){});
+	CreateFramebuffers(graph);
+
+	m_UIPass.OnSwapchainResize(width, height, graph);
+}
