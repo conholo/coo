@@ -1,13 +1,26 @@
 #pragma once
 
 #include "render_pass.h"
+#include "render_pass_resources/texture_resource.h"
+#include "render_pass_resources/fence_resource.h"
+#include "render_pass_resources/semaphore_resource.h"
+#include "render_pass_resources/command_buffer_resource.h"
+#include "render_pass_resources/framebuffer_resource.h"
+#include "render_pass_resources/graphics_pipeline_resource.h"
+#include "render_pass_resources/material_layout_resource.h"
+#include "render_pass_resources/material_resource.h"
+#include "render_pass_resources/render_pass_object_resource.h"
+#include "render_pass_resources/shader_resource.h"
 #include "vulkan/irenderer.h"
 
 class GBufferPass : public RenderPass
 {
 public:
+
 	GBufferPass() = default;
 	~GBufferPass() override = default;
+
+	void DeclareDependencies(const std::initializer_list<std::string>& readResources, const std::initializer_list<std::string>& writeResources) override;
 	void CreateResources(RenderGraph& graph) override;
 	void Record(const FrameInfo& frameInfo, RenderGraph& graph) override;
 	void Submit(const FrameInfo& frameInfo, RenderGraph& graph) override;
@@ -38,7 +51,7 @@ private:
 
 	std::vector<ResourceHandle<FramebufferResource>> m_FramebufferHandles{};
 
-	ResourceHandle<GraphicsPipelineObjectResource> m_PipelineHandle{};
+	ResourceHandle<GraphicsPipelineResource> m_PipelineHandle{};
 	ResourceHandle<RenderPassObjectResource> m_RenderPassHandle{};
 	ResourceHandle<MaterialLayoutResource> m_MaterialLayoutHandle{};
 	ResourceHandle<MaterialResource> m_MaterialHandle{};

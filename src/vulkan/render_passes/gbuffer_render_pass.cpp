@@ -3,12 +3,19 @@
 #include "core/application.h"
 #include "render_graph.h"
 #include "render_graph_resource_declarations.h"
+#include "vulkan/render_passes/render_pass_resources/texture_resource.h"
 #include "vulkan/vulkan_fence.h"
 #include "vulkan/vulkan_framebuffer.h"
 #include "vulkan/vulkan_semaphore.h"
 
 #include <core/platform_path.h>
 #include <vulkan/vulkan_utils.h>
+
+void GBufferPass::DeclareDependencies(const std::initializer_list<std::string>& readResources, const std::initializer_list<std::string>& writeResources)
+{
+	m_ReadResources = {readResources};
+	m_WriteResources = {writeResources};
+}
 
 void GBufferPass::CreateResources(RenderGraph& graph)
 {
@@ -25,51 +32,42 @@ void GBufferPass::CreateResources(RenderGraph& graph)
 
 void GBufferPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 {
-	ResourceHandle<TextureResource> positionHandle = m_PositionTextureHandles[frameInfo.FrameIndex];
-	ResourceHandle<TextureResource> normalHandle = m_NormalTextureHandles[frameInfo.FrameIndex];
-	ResourceHandle<TextureResource> albedoHandle = m_AlbedoTextureHandles[frameInfo.FrameIndex];
-	auto* positionAttachmentResource = graph.GetResource<TextureResource>(positionHandle);
-	auto* normalAttachmentResource = graph.GetResource<TextureResource>(normalHandle);
-	auto* albedoAttachmentResource = graph.GetResource<TextureResource>(albedoHandle);
+	VulkanTexture2D& positionAttachmentResource = m_PositionTextureHandles[frameInfo.FrameIndex]->Get();
+	VulkanTexture2D& normalAttachmentResource = m_NormalTextureHandles[frameInfo.FrameIndex]->Get();
+	VulkanTexture2D& albedoAttachmentResource = m_AlbedoTextureHandles[frameInfo.FrameIndex]->Get();
 
 	// Update internal host-side state to reflect the image transitions made during the render pass
-	positionAttachmentResource->Get()->UpdateState(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	normalAttachmentResource->Get()->UpdateState(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	albedoAttachmentResource->Get()->UpdateState(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	positionAttachmentResource.UpdateState(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	normalAttachmentResource.UpdateState(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	albedoAttachmentResource.UpdateState(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-	ResourceHandle<CommandBufferResource> cmdHandle = m_CommandBufferHandles[frameInfo.FrameIndex];
-	auto* cmdBufferResource = graph.GetResource<CommandBufferResource>(cmdHandle);
+	VulkanCommandBuffer& cmd = m_CommandBufferHandles[frameInfo.FrameIndex]->Get();
 
-	ResourceHandle<FramebufferResource> fboHandle = m_FramebufferHandles[frameInfo.FrameIndex];
-	auto* fboResource = graph.GetResource<FramebufferResource>(fboHandle);
+	VulkanFramebuffer& fbo = m_FramebufferHandles[frameInfo.FrameIndex]->Get();
 
-	auto* renderPassResource = graph.GetResource<RenderPassObjectResource>(m_RenderPassHandle);
-	auto* graphicsPipelineResource = graph.GetResource<GraphicsPipelineObjectResource>(m_PipelineHandle);
-	auto* fenceResource = graph.GetResource<FenceResource>(m_ResourcesInFlightFenceHandles[frameInfo.FrameIndex]);
+	auto& renderPass = m_RenderPassHandle->Get();
+	auto& pipeline = m_PipelineHandle->Get();
+	auto& fence = m_ResourcesInFlightFenceHandles[frameInfo.FrameIndex]->Get();
 
-	auto cmd = cmdBufferResource->Get();
-	cmd->WaitForCompletion(fenceResource->Get()->GetHandle());
-	auto fbo = fboResource->Get();
-	auto renderPass = renderPassResource->Get();
-	auto pipeline = graphicsPipelineResource->Get();
+	cmd.WaitForCompletion(fence.GetHandle());
 
-	cmd->Begin();
+	cmd.Begin();
 	{
 		VkRenderPassBeginInfo gBufferRenderPassInfo{};
 		gBufferRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		gBufferRenderPassInfo.renderPass = renderPass->GetHandle();
-		gBufferRenderPassInfo.framebuffer = fbo->GetHandle();
+		gBufferRenderPassInfo.renderPass = renderPass.GetHandle();
+		gBufferRenderPassInfo.framebuffer = fbo.GetHandle();
 		gBufferRenderPassInfo.renderArea.offset = {0, 0};
-		auto attachmentExtent = VkExtent2D { fbo->Width(), fbo->Height() };
+		auto attachmentExtent = VkExtent2D { fbo.Width(), fbo.Height() };
 		gBufferRenderPassInfo.renderArea.extent = attachmentExtent;
 
-		renderPass->BeginPass(cmd->GetHandle(), gBufferRenderPassInfo, attachmentExtent);
+		renderPass.BeginPass(cmd.GetHandle(), gBufferRenderPassInfo, attachmentExtent);
 		{
-			pipeline->Bind(cmd->GetHandle());
+			pipeline.Bind(cmd.GetHandle());
 			for (auto& [id, gameObject] : frameInfo.ActiveScene.GameObjects)
 			{
-				auto globalUboResource = graph.GetResource<BufferResource>(GlobalUniformBufferResourceName);
-				gameObject.Render(cmd->GetHandle(), frameInfo.FrameIndex, globalUboResource->Get()->DescriptorInfo());
+				auto& globalUbo = *graph.Get<VulkanBuffer>(GlobalUniformBufferResourceName, frameInfo.FrameIndex);
+				gameObject.Render(cmd.GetHandle(), frameInfo.FrameIndex, globalUbo.DescriptorInfo());
 			}
 		}
 		renderPass->EndPass(cmd->GetHandle());
@@ -128,11 +126,11 @@ void GBufferPass::CreateSynchronizationPrimitives(RenderGraph& graph)
 	auto createSemaphore = [](size_t index, const std::string& baseName)
 	{
 		auto resourceName = baseName + std::to_string(index);
-		auto semaphore = std::make_shared<VulkanSemaphore>(resourceName);
-		return std::make_shared<SemaphoreResource>(resourceName, semaphore);
+		auto semaphore = new VulkanSemaphore(resourceName);
+		return std::make_shared<VulkanSemaphore>(resourceName, semaphore);
 	};
 
-	m_RenderCompleteSemaphoreHandles = graph.CreateResources<SemaphoreResource>(
+	m_RenderCompleteSemaphoreHandles = graph.CreateResources<VulkanSemaphore>(
 		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
 		GBufferRenderCompleteSemaphoreResourceName,
 		createSemaphore);
@@ -140,12 +138,11 @@ void GBufferPass::CreateSynchronizationPrimitives(RenderGraph& graph)
 	auto createFence = [](size_t index, const std::string& baseName)
 	{
 		auto resourceName = baseName + std::to_string(index);
-		// Start in signaled state
-		auto fence = std::make_shared<VulkanFence>(resourceName, true);
-		return std::make_shared<FenceResource>(resourceName, fence);
+		auto fence = new VulkanFence(resourceName, true);
+		return std::make_unique<VulkanFence>(resourceName, fence);
 	};
 
-	m_ResourcesInFlightFenceHandles = graph.CreateResources<FenceResource>(
+	m_ResourcesInFlightFenceHandles = graph.CreateResources<VulkanFence>(
 		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
 		GBufferResourcesInFlightResourceName,
 		createFence);

@@ -2,10 +2,31 @@
 
 #include "render_pass.h"
 #include "render_pass_resource.h"
-
 #include <memory>
 #include <unordered_map>
 #include <vector>
+
+class RenderGraph;
+
+template <typename T>
+class ResourceHandle
+{
+	friend class RenderGraph;
+
+private:
+	RenderGraph* m_Graph;
+	size_t m_Id;
+
+public:
+	ResourceHandle() : m_Graph(nullptr), m_Id(std::numeric_limits<size_t>::max()) {}
+	ResourceHandle(RenderGraph* graph, size_t id) : m_Graph(graph), m_Id(id) {}
+
+	T* Get() const;
+
+	size_t operator()() { return m_Id; }
+	T* operator->() const { return Get(); }
+	T& operator*() const { return *Get(); }
+};
 
 class RenderGraph
 {
@@ -13,53 +34,34 @@ public:
 	template <typename T, typename Factory, typename... Args>
 	std::vector<ResourceHandle<T>> CreateResources(size_t count, const std::string& baseName, Factory&& factory, Args&&... args)
 	{
-		// Ensure T is RenderPassResource
-		static_assert(std::is_base_of<RenderPassResource, T>::value, "T must be derived from RenderPassResource");
-
 		std::vector<ResourceHandle<T>> handles;
 		handles.reserve(count);
 		size_t startId = m_Resources.size();
 
 		for (size_t i = 0; i < count; ++i)
 		{
-			auto resource = factory(i, baseName, std::forward<Args>(args)...);
+			std::unique_ptr<RenderPassResource> resource = factory(i, baseName, std::forward<Args>(args)...);
 			m_Resources.push_back(std::move(resource));
-			handles.push_back(ResourceHandle<T>(startId + i));
+			handles.push_back(ResourceHandle<T>(this, startId + i));
 		}
 
-		// Avoid the need for a default constructor of ResourceHandle by using emplace - construct in place
-		m_ResourceHandles.emplace(baseName, ResourceHandle<RenderPassResource>(startId));
+		m_ResourceHandles[baseName] = handles[0];
 		m_ResourceCounts[baseName] = count;
 		return handles;
 	}
 
-	template <typename T, typename Factory, typename... Args>
-	ResourceHandle<T> CreateResource(const std::string& baseName, Factory&& factory, Args&&... args)
-	{
-		// Ensure T is derived from RenderPassResource
-		static_assert(std::is_base_of<RenderPassResource, T>::value, "T must be derived from RenderPassResource");
-
-		size_t startId = m_Resources.size();  // Get the current size to use as the ID
-		auto resource = factory(baseName, std::forward<Args>(args)...);
-		m_Resources.push_back(std::move(resource));  // Store the created resource
-
-		// Emplace the resource handle in the map, using T for correct type handling
-		m_ResourceHandles.emplace(baseName, ResourceHandle<RenderPassResource>(startId));
-		m_ResourceCounts[baseName] = 1;  // Set the resource count for the baseName
-
-		return ResourceHandle<T>(startId);  // Return the handle to the created resource
-	}
-
+	/// Gets the RenderGraphResource<T> using the handle ID.
+	/// \tparam T
+	/// \param id
+	/// \return
 	template<typename T>
-	T* GetResource(ResourceHandle<T> handle)
+	T* Get(size_t id)
 	{
-		size_t resourceIndex = handle.GetId();
-		if (resourceIndex >= m_Resources.size())
+		if (id >= m_Resources.size())
 		{
-			throw std::out_of_range("Invalid resource handle");
+			throw std::runtime_error("Invalid resource handle");
 		}
-
-		auto* resource = dynamic_cast<T*>(m_Resources[resourceIndex].get());
+		auto* resource = dynamic_cast<T*>(m_Resources[id].get());
 		if (!resource)
 		{
 			throw std::bad_cast();
@@ -68,7 +70,7 @@ public:
 	}
 
 	template<typename T>
-	T* GetResource(const std::string& baseName, uint32_t frameIndex = 0)
+	T* Get(const std::string& baseName, uint32_t frameIndex = 0)
 	{
 		auto handleIt = m_ResourceHandles.find(baseName);
 		auto countIt = m_ResourceCounts.find(baseName);
@@ -78,7 +80,7 @@ public:
 			return nullptr;
 		}
 
-		size_t resourceIndex = handleIt->second.GetId() + (frameIndex % countIt->second);
+		size_t resourceIndex = handleIt->second() + (frameIndex % countIt->second);
 		if (resourceIndex >= m_Resources.size())
 		{
 			throw std::out_of_range("Invalid resource index");
@@ -90,6 +92,17 @@ public:
 			throw std::bad_cast();
 		}
 		return resource;
+	}
+
+	template<typename T>
+	ResourceHandle<T> GetResourceHandle(const std::string& name)
+	{
+		auto it = m_ResourceHandles.find(name);
+		if (it == m_ResourceHandles.end())
+		{
+			throw std::runtime_error("Resource not found: " + name);
+		}
+		return ResourceHandle<T>(this, it->second);
 	}
 
 	template<typename T>
@@ -147,9 +160,9 @@ public:
 		// Adjust subsequent resource IDs in the handles map
 		for (auto& pair : m_ResourceHandles)
 		{
-			if (pair.second.GetId() > resourceIndex)
+			if (pair.second() > resourceIndex)
 			{
-				pair.second = ResourceHandle<RenderPassResource>(pair.second.GetId() - 1);
+				pair.second = ResourceHandle<RenderPassResource>(this, pair.second() - 1);
 			}
 		}
 
@@ -171,7 +184,7 @@ public:
 			return false;
 		}
 
-		size_t startId = handleIt->second.GetId();
+		size_t startId = handleIt->second();
 		size_t endId = startId + count;
 
 		for (size_t i = startId; i < endId; ++i)
@@ -201,9 +214,9 @@ public:
 		// Update the IDs of the remaining resources
 		for (auto& pair : m_ResourceHandles)
 		{
-			if (pair.second.GetId() > startId)
+			if (pair.second() > startId)
 			{
-				pair.second = ResourceHandle<RenderPassResource>(pair.second.GetId() - count);
+				pair.second = ResourceHandle<RenderPassResource>(this, pair.second() - count);
 			}
 		}
 
@@ -224,27 +237,13 @@ public:
 	}
 
 	template <typename T>
-	T* AddPass(std::function<std::unique_ptr<T>()> factory)
-	{
-		auto pass = factory();
-		T* ptr = pass.get();
-		m_Passes.push_back(std::move(pass));
-		return ptr;
-	}
-
-	template <typename T>
-	T* AddPass()
+	T* AddPass(const std::initializer_list<std::string>& readResources, const std::initializer_list<std::string>& writeResources)
 	{
 		auto pass = std::make_unique<T>();
 		T* ptr = pass.get();
+		ptr->DeclareDependencies(readResources, writeResources);
 		m_Passes.push_back(std::move(pass));
 		return ptr;
-	}
-
-	template <typename T, typename... Args>
-	T* AddPass(Args&&... args)
-	{
-		return AddPass<T>([&]() { return std::make_unique<T>(std::forward<Args>(args)...); });
 	}
 
 	void OnSwapchainResize(uint32_t width, uint32_t height)
@@ -254,7 +253,7 @@ public:
 			pass->OnSwapchainResize(width, height, *this);
 		}
 	}
-	
+
 	void Initialize()
 	{
 		for (auto& pass : m_Passes)
@@ -273,8 +272,18 @@ public:
 	}
 
 private:
-	std::vector<std::shared_ptr<RenderPassResource>> m_Resources;
+	std::vector<std::unique_ptr<RenderPassResource>> m_Resources;
 	std::unordered_map<std::string, ResourceHandle<RenderPassResource>> m_ResourceHandles;
 	std::unordered_map<std::string, size_t> m_ResourceCounts;
 	std::vector<std::unique_ptr<RenderPass>> m_Passes;
 };
+
+template <typename T>
+T* ResourceHandle<T>::Get() const
+{
+	if (!m_Graph)
+	{
+		throw std::runtime_error("Invalid resource handle");
+	}
+	return m_Graph->Get<T>(m_Id);
+}

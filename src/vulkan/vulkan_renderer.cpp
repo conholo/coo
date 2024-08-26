@@ -58,7 +58,9 @@ void VulkanRenderer::Initialize()
 	auto fsqVertPath = FileSystemUtil::PathToString(shaderDirectory / "fsq.vert");
 	m_GraphRef.CreateResource<ShaderResource>(FullScreenQuadShaderResourceName, createShader, fsqVertPath, ShaderType::Vertex);
 
-	m_GraphRef.AddPass<GBufferPass>();
+	m_GraphRef.AddPass<GBufferPass>(
+		{ GlobalUniformBufferResourceName, SwapchainImageAvailableSemaphoreResourceName },
+		{ GBufferCommandBufferResourceName, GBufferGraphicsPipelineResourceName, GBuffer});
 	m_GraphRef.AddPass<LightingPass>();
 	m_GraphRef.AddPass<SceneCompositionPass>();
 	m_GraphRef.AddPass<SwapchainPass>();
