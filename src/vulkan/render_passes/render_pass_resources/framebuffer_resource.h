@@ -16,7 +16,7 @@ public:
 	{
 	}
 
-	~FramebufferResource()
+	~FramebufferResource() override
 	{
 		delete m_Framebuffer;
 	}

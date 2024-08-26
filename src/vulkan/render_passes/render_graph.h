@@ -31,6 +31,13 @@ public:
 class RenderGraph
 {
 public:
+	using ResourceTable = std::unordered_map<std::string, std::vector<ResourceHandle<RenderPassResource>>>;
+	struct PassResourceTables
+	{
+		ResourceTable ReadTable;
+		ResourceTable WriteTable;
+	};
+
 	template <typename T, typename Factory, typename... Args>
 	std::vector<ResourceHandle<T>> CreateResources(size_t count, const std::string& baseName, Factory&& factory, Args&&... args)
 	{
@@ -48,6 +55,13 @@ public:
 		m_ResourceHandles[baseName] = handles[0];
 		m_ResourceCounts[baseName] = count;
 		return handles;
+	}
+
+	template <typename T, typename Factory, typename... Args>
+	ResourceHandle<T> CreateResource(const std::string& baseName, Factory&& factory, Args&&... args)
+	{
+		auto handles = CreateResources<T>(1, baseName, factory, std::forward<Args>(args)...);
+		return handles[0];
 	}
 
 	/// Gets the RenderGraphResource<T> using the handle ID.
@@ -236,14 +250,27 @@ public:
 		return FreeResources<T>(baseName, count, freeFn, std::forward<Args>(args)...);
 	}
 
+	ResourceTable CreateResourceTable(const std::initializer_list<std::string>& declarations)
+	{
+		ResourceTable table;
+		for(auto& declaration: declarations)
+			table[declaration] = {};
+		return table;
+	}
+
 	template <typename T>
 	T* AddPass(const std::initializer_list<std::string>& readResources, const std::initializer_list<std::string>& writeResources)
 	{
 		auto pass = std::make_unique<T>();
-		T* ptr = pass.get();
-		ptr->DeclareDependencies(readResources, writeResources);
-		m_Passes.push_back(std::move(pass));
-		return ptr;
+
+		m_ResourceTable[pass] = {
+			.ReadTable = CreateResourceTable(readResources),
+			.WriteTable = CreateResourceTable(writeResources)
+		};
+
+		pass->DeclareDependencies(readResources, writeResources);
+		m_Passes.push_back(pass);
+		return pass.get();
 	}
 
 	void OnSwapchainResize(uint32_t width, uint32_t height)
@@ -276,6 +303,8 @@ private:
 	std::unordered_map<std::string, ResourceHandle<RenderPassResource>> m_ResourceHandles;
 	std::unordered_map<std::string, size_t> m_ResourceCounts;
 	std::vector<std::unique_ptr<RenderPass>> m_Passes;
+
+	std::unordered_map<RenderPass, PassResourceTables> m_ResourceTable;
 };
 
 template <typename T>

@@ -8,6 +8,7 @@
 #include "render_passes/gbuffer_render_pass.h"
 #include "render_passes/lighting_render_pass.h"
 #include "render_passes/render_graph.h"
+#include "render_passes/render_pass_resources/all_resources.h"
 #include "render_passes/render_graph_resource_declarations.h"
 #include "vulkan_utils.h"
 #include <imgui.h>
@@ -38,29 +39,55 @@ void VulkanRenderer::Initialize()
 		[](size_t index, const std::string& resourceBaseName)
 	{
 		auto resourceName = resourceBaseName + " " + std::to_string(index);
-		std::shared_ptr<VulkanBuffer> uboBuffer = std::make_shared<VulkanBuffer>(
+		auto bufferResource = std::make_unique<BufferResource>(resourceName);
+		bufferResource->Create(
 			sizeof(GlobalUbo),
 			1,
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-		uboBuffer->Map();
-		return std::make_shared<BufferResource>(resourceName, uboBuffer);
+		return bufferResource;
 	};
-	m_GraphRef.CreateResources<BufferResource>(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, GlobalUniformBufferResourceName, createGlobalUbos);
+	m_GraphRef.CreateResources<BufferResource>(
+		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
+		GlobalUniformBufferResourceName,
+		createGlobalUbos);
 
 	auto createShader =
 		[](const std::string& resourceBaseName, const std::string& filePath, ShaderType shaderType)
 	{
-		auto shader = std::make_shared<VulkanShader>(filePath, shaderType);
-		return std::make_shared<ShaderResource>(resourceBaseName, shader);
+		auto shaderResource = std::make_unique<ShaderResource>(resourceBaseName);
+		shaderResource->Create(filePath, shaderType);
+		return shaderResource;
 	};
 	auto shaderDirectory = FileSystemUtil::GetShaderDirectory();
 	auto fsqVertPath = FileSystemUtil::PathToString(shaderDirectory / "fsq.vert");
-	m_GraphRef.CreateResource<ShaderResource>(FullScreenQuadShaderResourceName, createShader, fsqVertPath, ShaderType::Vertex);
+	m_GraphRef.CreateResource<ShaderResource>(
+		FullScreenQuadShaderResourceName,
+		createShader,
+		fsqVertPath,
+		ShaderType::Vertex);
 
 	m_GraphRef.AddPass<GBufferPass>(
-		{ GlobalUniformBufferResourceName, SwapchainImageAvailableSemaphoreResourceName },
-		{ GBufferCommandBufferResourceName, GBufferGraphicsPipelineResourceName, GBuffer});
+		{
+			GlobalUniformBufferResourceName,
+			SwapchainImageAvailableSemaphoreResourceName
+		},
+		{
+			GBufferCommandBufferResourceName,
+			GBufferGraphicsPipelineResourceName,
+			GBufferRenderPassResourceName,
+			GBufferVertexShaderResourceName,
+			GBufferFragmentShaderResourceName,
+			GBufferFramebufferResourceName,
+			GBufferMaterialLayoutResourceName,
+			GBufferMaterialResourceName,
+			GBufferAlbedoAttachmentTextureResourceName,
+			GBufferPositionAttachmentTextureResourceName,
+			GBufferNormalAttachmentTextureResourceName,
+			GBufferDepthAttachmentTextureResourceName,
+			GBufferRenderCompleteSemaphoreResourceName,
+			GBufferResourcesInFlightResourceName
+		});
 	m_GraphRef.AddPass<LightingPass>();
 	m_GraphRef.AddPass<SceneCompositionPass>();
 	m_GraphRef.AddPass<SwapchainPass>();
