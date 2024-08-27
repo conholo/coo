@@ -1,10 +1,13 @@
 #pragma once
-
+#include "core/uuid.h"
 #include "render_pass.h"
 #include "render_pass_resource.h"
 #include <memory>
 #include <unordered_map>
+#include <limits>
 #include <vector>
+#include <iostream>
+#include <algorithm>
 
 class RenderGraph;
 
@@ -26,6 +29,12 @@ public:
 	size_t operator()() { return m_Id; }
 	T* operator->() const { return Get(); }
 	T& operator*() const { return *Get(); }
+
+	explicit operator ResourceHandle<RenderPassResource>() const
+	{
+		static_assert(std::is_base_of<RenderPassResource, T>::value, "T must be derived from RenderPassResource");
+		return {m_Graph, m_Id};
+	}
 };
 
 class RenderGraph
@@ -47,12 +56,13 @@ public:
 
 		for (size_t i = 0; i < count; ++i)
 		{
-			std::unique_ptr<RenderPassResource> resource = factory(i, baseName, std::forward<Args>(args)...);
+			auto resourceName = baseName + " " + std::to_string(i);
+			auto resource = factory(resourceName, std::forward<Args>(args)...);
 			m_Resources.push_back(std::move(resource));
 			handles.push_back(ResourceHandle<T>(this, startId + i));
 		}
 
-		m_ResourceHandles[baseName] = handles[0];
+		m_ResourceHandles[baseName] = static_cast<ResourceHandle<RenderPassResource>>(handles[0]);
 		m_ResourceCounts[baseName] = count;
 		return handles;
 	}
@@ -67,7 +77,7 @@ public:
 	/// Gets the RenderGraphResource<T> using the handle ID.
 	/// \tparam T
 	/// \param id
-	/// \return
+	/// \return A pointer to the resource.
 	template<typename T>
 	T* Get(size_t id)
 	{
@@ -250,7 +260,7 @@ public:
 		return FreeResources<T>(baseName, count, freeFn, std::forward<Args>(args)...);
 	}
 
-	ResourceTable CreateResourceTable(const std::initializer_list<std::string>& declarations)
+	ResourceTable ZeroInitializeResourceTable(const std::initializer_list<std::string>& declarations)
 	{
 		ResourceTable table;
 		for(auto& declaration: declarations)
@@ -261,21 +271,54 @@ public:
 	template <typename T>
 	T* AddPass(const std::initializer_list<std::string>& readResources, const std::initializer_list<std::string>& writeResources)
 	{
+		// Create a unique_ptr to the derived pass type
 		auto pass = std::make_unique<T>();
+		uuid passUuid = pass->GetUuid();
 
-		m_ResourceTable[pass] = {
-			.ReadTable = CreateResourceTable(readResources),
-			.WriteTable = CreateResourceTable(writeResources)
+		// Initialize the resource tables for the pass
+		m_ResourceTable[passUuid] = {
+			.ReadTable = ZeroInitializeResourceTable(readResources),
+			.WriteTable = ZeroInitializeResourceTable(writeResources)
 		};
 
+		// Declare dependencies for the pass
 		pass->DeclareDependencies(readResources, writeResources);
-		m_Passes.push_back(pass);
-		return pass.get();
+
+		// Store the raw pointer before moving the unique_ptr
+		T* passPtr = pass.get();
+
+		// Move the unique_ptr into the vector as a unique_ptr to RenderPass
+		m_Passes[passUuid] = std::move(pass);
+
+		// Return the raw pointer to the newly added pass
+		return passPtr;
+	}
+
+	void ConstructDependencies(std::unordered_map<uuid, std::vector<uuid>>& outDependencies)
+	{
+		for (auto& [_, passA] : m_Passes)
+		{
+			for (auto& [_, passB] : m_Passes)
+			{
+				if(passA == passB) continue;
+				bool passADependsOnB =
+					std::any_of(passB->m_ReadResources.begin(), passB->m_ReadResources.end(),
+					[&](const std::string& resource)
+					{
+						return find(passA->m_WriteResources.begin(), passA->m_WriteResources.end(), resource) != passA->m_WriteResources.end();
+					});
+
+				if(passADependsOnB)
+				{
+					outDependencies[passA->GetUuid()].push_back(passB->GetUuid());
+				}
+			}
+		}
 	}
 
 	void OnSwapchainResize(uint32_t width, uint32_t height)
 	{
-		for(auto& pass: m_Passes)
+		for (auto& [_, pass] : m_Passes)
 		{
 			pass->OnSwapchainResize(width, height, *this);
 		}
@@ -283,7 +326,7 @@ public:
 
 	void Initialize()
 	{
-		for (auto& pass : m_Passes)
+		for (auto& [_, pass] : m_Passes)
 		{
 			pass->CreateResources(*this);
 		}
@@ -291,7 +334,7 @@ public:
 
 	void Execute(FrameInfo& frameInfo)
 	{
-		for (auto& pass : m_Passes)
+		for (auto& [_, pass] : m_Passes)
 		{
 			pass->Record(frameInfo, *this);
 			pass->Submit(frameInfo, *this);
@@ -302,9 +345,10 @@ private:
 	std::vector<std::unique_ptr<RenderPassResource>> m_Resources;
 	std::unordered_map<std::string, ResourceHandle<RenderPassResource>> m_ResourceHandles;
 	std::unordered_map<std::string, size_t> m_ResourceCounts;
-	std::vector<std::unique_ptr<RenderPass>> m_Passes;
 
-	std::unordered_map<RenderPass, PassResourceTables> m_ResourceTable;
+	std::unordered_map<uuid, std::unique_ptr<RenderPass>> m_Passes;
+
+	std::unordered_map<uuid, PassResourceTables> m_ResourceTable;
 };
 
 template <typename T>

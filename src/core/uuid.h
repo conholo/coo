@@ -7,10 +7,12 @@ class uuid
 {
 public:
     uuid();
-    uuid(uint64_t uuid);
+    explicit uuid(uint64_t uuid);
     uuid(const uuid &) = default;
 
-    operator uint64_t() const { return m_uuid; }
+    explicit operator uint64_t() const { return m_uuid; }
+	bool operator==(const uuid& other) const { return m_uuid == other.m_uuid; }
+	bool operator!=(const uuid& other) const { return m_uuid != other.m_uuid; }
 
 private:
     uint64_t m_uuid;

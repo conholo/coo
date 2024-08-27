@@ -36,9 +36,8 @@ void VulkanRenderer::Initialize()
 
 	// Create Global Resources
 	auto createGlobalUbos =
-		[](size_t index, const std::string& resourceBaseName)
+		[](const std::string& resourceName)
 	{
-		auto resourceName = resourceBaseName + " " + std::to_string(index);
 		auto bufferResource = std::make_unique<BufferResource>(resourceName);
 		bufferResource->Create(
 			sizeof(GlobalUbo),
@@ -47,15 +46,15 @@ void VulkanRenderer::Initialize()
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 		return bufferResource;
 	};
-	m_GraphRef.CreateResources<BufferResource>(
+	auto handles = m_GraphRef.CreateResources<BufferResource>(
 		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
 		GlobalUniformBufferResourceName,
 		createGlobalUbos);
 
 	auto createShader =
-		[](const std::string& resourceBaseName, const std::string& filePath, ShaderType shaderType)
+		[](const std::string& resourceName, const std::string& filePath, ShaderType shaderType)
 	{
-		auto shaderResource = std::make_unique<ShaderResource>(resourceBaseName);
+		auto shaderResource = std::make_unique<ShaderResource>(resourceName);
 		shaderResource->Create(filePath, shaderType);
 		return shaderResource;
 	};
@@ -88,7 +87,11 @@ void VulkanRenderer::Initialize()
 			GBufferRenderCompleteSemaphoreResourceName,
 			GBufferResourcesInFlightResourceName
 		});
-	m_GraphRef.AddPass<LightingPass>();
+	m_GraphRef.AddPass<LightingPass>(
+		{
+			GBufferRenderCompleteSemaphoreResourceName
+		}
+		);
 	m_GraphRef.AddPass<SceneCompositionPass>();
 	m_GraphRef.AddPass<SwapchainPass>();
 
