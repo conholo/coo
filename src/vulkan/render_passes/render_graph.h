@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <limits>
 #include <vector>
+#include <queue>
 #include <iostream>
 #include <algorithm>
 
@@ -334,6 +335,45 @@ public:
 
 	void Execute(FrameInfo& frameInfo)
 	{
+		std::unordered_map<uuid, std::vector<uuid>> dependencies;
+		ConstructDependencies(dependencies);
+
+		std::vector<RenderPass*> sortedPasses;
+		std::unordered_map<uuid, int> inDegree;
+
+		for(auto& dep: dependencies)
+		{
+			for(uuid depPassUuid : dep.second)
+			{
+				RenderPass* pass = m_Passes[depPassUuid].get();
+				inDegree[pass->GetUuid()]++;
+			}
+		}
+
+		std::queue<RenderPass*> readyQueue;
+		for(auto& [_, pass] : m_Passes)
+		{
+			if(inDegree[pass->GetUuid()] == 0)
+			{
+				readyQueue.push(pass.get());
+			}
+		}
+
+		while(!readyQueue.empty())
+		{
+			RenderPass* pass = readyQueue.front();
+			readyQueue.pop();
+			sortedPasses.push_back(pass);
+
+			for(auto& dependentUuid: dependencies[pass->GetUuid()])
+			{
+				if(--inDegree[dependentUuid] == 0)
+				{
+					readyQueue.push(m_Passes[dependentUuid].get());
+				}
+			}
+		}
+
 		for (auto& [_, pass] : m_Passes)
 		{
 			pass->Record(frameInfo, *this);
