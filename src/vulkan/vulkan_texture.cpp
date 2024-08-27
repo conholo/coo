@@ -6,27 +6,27 @@
 
 #include <utility>
 
-std::shared_ptr<VulkanTexture2D> VulkanTexture2D::CreateFromFile(const TextureSpecification& specification, const std::string& filepath)
+std::unique_ptr<VulkanTexture2D> VulkanTexture2D::CreateFromFile(const TextureSpecification& specification, const std::string& filepath)
 {
-    auto texture = std::make_shared<VulkanTexture2D>(specification);
+    auto texture = std::make_unique<VulkanTexture2D>(specification);
     texture->LoadFromFile(filepath);
     texture->Invalidate(false);
     return texture;
 }
 
-std::shared_ptr<VulkanTexture2D> VulkanTexture2D::CreateFromMemory(const TextureSpecification& specification, const Buffer& data)
+std::unique_ptr<VulkanTexture2D> VulkanTexture2D::CreateFromMemory(const TextureSpecification& specification, const Buffer& data)
 {
-    auto texture = std::make_shared<VulkanTexture2D>(specification);
+    auto texture = std::make_unique<VulkanTexture2D>(specification);
     texture->LoadFromMemory(data);
     texture->Invalidate(false);
     return texture;
 }
 
-std::shared_ptr<VulkanTexture2D> VulkanTexture2D::CreateAttachment(const TextureSpecification& specification)
+std::unique_ptr<VulkanTexture2D> VulkanTexture2D::CreateAttachment(const TextureSpecification& specification)
 {
     auto spec = specification;
     spec.Usage = TextureUsage::Attachment;
-    auto texture = std::make_shared<VulkanTexture2D>(spec);
+    auto texture = std::make_unique<VulkanTexture2D>(spec);
     texture->Invalidate();
     return texture;
 }

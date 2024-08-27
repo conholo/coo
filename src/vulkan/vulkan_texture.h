@@ -24,9 +24,9 @@ struct TextureSpecification
 class VulkanTexture2D
 {
 public:
-    static std::shared_ptr<VulkanTexture2D> CreateFromFile(const TextureSpecification& specification, const std::string& filepath);
-    static std::shared_ptr<VulkanTexture2D> CreateFromMemory(const TextureSpecification& specification, const Buffer& data);
-    static std::shared_ptr<VulkanTexture2D> CreateAttachment(const TextureSpecification& specification);
+    static std::unique_ptr<VulkanTexture2D> CreateFromFile(const TextureSpecification& specification, const std::string& filepath);
+    static std::unique_ptr<VulkanTexture2D> CreateFromMemory(const TextureSpecification& specification, const Buffer& data);
+    static std::unique_ptr<VulkanTexture2D> CreateAttachment(const TextureSpecification& specification);
 
     explicit VulkanTexture2D(TextureSpecification specification);
     ~VulkanTexture2D();

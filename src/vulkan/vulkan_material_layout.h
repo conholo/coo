@@ -20,9 +20,6 @@ public:
     VulkanMaterialLayout(VulkanShader& vertShader, VulkanShader& fragShader, std::string debugName);
     ~VulkanMaterialLayout();
 
-    VulkanMaterialLayout(const VulkanMaterialLayout&) = delete;
-    VulkanMaterialLayout& operator=(const VulkanMaterialLayout&) = delete;
-
     const ShaderDescriptorInfo& GetShaderDescriptorInfo() const { return m_ShaderDescriptorInfo; }
     const std::vector<std::shared_ptr<VulkanDescriptorSetLayout>>& GetDescriptorSetLayouts() const { return m_DescriptorSetLayouts; }
     const std::vector<PushConstantRange>& GetPushConstantRanges() const { return m_PushConstantRanges; }

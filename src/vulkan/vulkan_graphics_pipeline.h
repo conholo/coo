@@ -81,7 +81,7 @@ public:
     VulkanGraphicsPipelineBuilder& SetLayout(VkPipelineLayout layout);
     VulkanGraphicsPipelineBuilder& SetRenderPass(VulkanRenderPass* renderPass, uint32_t subpass = 0);
 
-    std::shared_ptr<VulkanGraphicsPipeline> Build();
+    std::unique_ptr<VulkanGraphicsPipeline> Build();
 
 private:
     std::string m_DebugName;

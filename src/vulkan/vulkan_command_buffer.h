@@ -41,6 +41,7 @@ public:
 
 	bool IsRecording() const { return m_State == State::Recording; }
 	VkCommandBuffer GetHandle() const { return m_CommandBuffer; }
+	VkCommandBuffer& GetHandle() { return m_CommandBuffer; }
 	State GetState() const { return m_State; }
 
 private:

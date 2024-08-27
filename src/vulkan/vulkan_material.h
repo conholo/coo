@@ -23,7 +23,7 @@ struct DescriptorUpdate
 class VulkanMaterial
 {
 public:
-    explicit VulkanMaterial(std::shared_ptr<VulkanMaterialLayout> layout);
+    explicit VulkanMaterial(VulkanMaterialLayout& layoutRef);
     ~VulkanMaterial();
 
     // Disable copying
@@ -41,7 +41,7 @@ public:
 	template<typename T>
 	void SetPushConstant(const std::string& name, const T& value)
 	{
-		const auto& pushConstantRanges = m_Layout->GetPushConstantRanges();
+		const auto& pushConstantRanges = m_LayoutRef.GetPushConstantRanges();
 		auto it = std::find_if(pushConstantRanges.begin(), pushConstantRanges.end(), [&name](const VulkanMaterialLayout::PushConstantRange& range) { return range.name == name; });
 
 		if (it == pushConstantRanges.end())
@@ -62,13 +62,13 @@ public:
     void BindPushConstants(VkCommandBuffer commandBuffer);
 
 	VkDescriptorSet GetDescriptorSetAt(uint32_t frameIndex, uint32_t index) { return m_DescriptorSets[frameIndex][index]; }
-    VkPipelineLayout GetPipelineLayout() const { return m_Layout->GetPipelineLayout(); }
+    VkPipelineLayout GetPipelineLayout() const { return m_LayoutRef.GetPipelineLayout(); }
     std::shared_ptr<VulkanMaterial> Clone() const;
 
 private:
     void AllocateDescriptorSets();
 
-    std::shared_ptr<VulkanMaterialLayout> m_Layout;
+    VulkanMaterialLayout& m_LayoutRef;
     std::unique_ptr<VulkanDescriptorPool> m_DescriptorPool;
     std::vector<std::vector<VkDescriptorSet>> m_DescriptorSets;
     std::unordered_map<std::string, std::vector<uint8_t>> m_PushConstantData;

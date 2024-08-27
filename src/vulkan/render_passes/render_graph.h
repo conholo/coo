@@ -58,7 +58,7 @@ public:
 		for (size_t i = 0; i < count; ++i)
 		{
 			auto resourceName = baseName + " " + std::to_string(i);
-			auto resource = factory(resourceName, std::forward<Args>(args)...);
+			auto resource = factory(i, resourceName, std::forward<Args>(args)...);
 			m_Resources.push_back(std::move(resource));
 			handles.push_back(ResourceHandle<T>(this, startId + i));
 		}
@@ -120,14 +120,54 @@ public:
 	}
 
 	template<typename T>
-	ResourceHandle<T> GetResourceHandle(const std::string& name)
+	ResourceHandle<T> GetGlobalResourceHandle(const std::string& name, uint32_t frameIndex = 0)
 	{
 		auto it = m_ResourceHandles.find(name);
 		if (it == m_ResourceHandles.end())
 		{
 			throw std::runtime_error("Resource not found: " + name);
 		}
-		return ResourceHandle<T>(this, it->second);
+
+		// Determine the correct resource index based on the frame index and buffering
+		size_t baseIndex = it->second();
+		auto countIt = m_ResourceCounts.find(name);
+		if (countIt == m_ResourceCounts.end())
+		{
+			throw std::runtime_error("Resource count not found for: " + name);
+		}
+
+		// Compute the resource handle based on the frame index and the number of resources
+		size_t resourceIndex = baseIndex + (frameIndex % countIt->second);
+
+		return ResourceHandle<T>(this, resourceIndex);
+	}
+
+	template<typename T>
+	ResourceHandle<T> GetResourceHandle(const std::string& name, const uuid& passUuid, uint32_t frameIndex = 0)
+	{
+		auto it = m_ResourceHandles.find(name);
+		if (it == m_ResourceHandles.end())
+		{
+			throw std::runtime_error("Resource not found: " + name);
+		}
+
+		// Check if the requesting pass has this resource declared as a read dependency
+		const auto& passResources = m_ResourceTable[passUuid];
+		if (passResources.ReadTable.find(name) == passResources.ReadTable.end())
+		{
+			throw std::runtime_error("Pass does not have read access to the requested resource: " + name);
+		}
+
+		// Determine the correct resource index based on the frame index and buffering
+		size_t baseIndex = it->second();
+		auto countIt = m_ResourceCounts.find(name);
+		if (countIt == m_ResourceCounts.end())
+		{
+			throw std::runtime_error("Resource count not found for: " + name);
+		}
+
+		size_t resourceIndex = baseIndex + (frameIndex % countIt->second);
+		return ResourceHandle<T>(this, resourceIndex);
 	}
 
 	template<typename T>
@@ -146,119 +186,6 @@ public:
 		}
 
 		return false;
-	}
-
-	template<typename T, typename FreeFn, typename... Args>
-	bool FreeResource(ResourceHandle<T> handle, FreeFn&& freeFn, Args&&... args)
-	{
-		size_t resourceIndex = handle.GetId();
-		if (resourceIndex >= m_Resources.size())
-		{
-			std::cerr << "Invalid resource handle" << std::endl;
-			return false;
-		}
-
-		// Attempt to cast the resource to the correct type
-		auto resource = std::dynamic_pointer_cast<T>(m_Resources[resourceIndex]);
-		if (!resource)
-		{
-			std::cerr << "Bad cast when trying to free resource" << std::endl;
-			return false;
-		}
-
-		// Call the provided free function
-		freeFn(resource->Get(), std::forward<Args>(args)...);
-
-		// Remove the resource from the list and reset it
-		m_Resources[resourceIndex].reset();
-
-		// Erase the resource entry from the maps
-		auto it = std::find_if(m_ResourceHandles.begin(), m_ResourceHandles.end(),
-			[resourceIndex](const auto& pair) { return pair.second.GetId() == resourceIndex; });
-		if (it != m_ResourceHandles.end())
-		{
-			std::string baseName = it->first;
-			m_ResourceHandles.erase(it);
-			m_ResourceCounts.erase(baseName);
-		}
-
-		// Adjust subsequent resource IDs in the handles map
-		for (auto& pair : m_ResourceHandles)
-		{
-			if (pair.second() > resourceIndex)
-			{
-				pair.second = ResourceHandle<RenderPassResource>(this, pair.second() - 1);
-			}
-		}
-
-		// Remove the entry from the m_Resources vector
-		m_Resources.erase(m_Resources.begin() + resourceIndex);
-
-		return true;
-	}
-
-	template <typename T, typename FreeFn, typename... Args>
-	bool FreeResources(const std::string& baseName, uint32_t count, FreeFn&& freeFn, Args&&... args)
-	{
-		auto handleIt = m_ResourceHandles.find(baseName);
-		auto countIt = m_ResourceCounts.find(baseName);
-
-		if (handleIt == m_ResourceHandles.end() || countIt == m_ResourceCounts.end())
-		{
-			std::cerr << "Resource not found: " + baseName << "\n";
-			return false;
-		}
-
-		size_t startId = handleIt->second();
-		size_t endId = startId + count;
-
-		for (size_t i = startId; i < endId; ++i)
-		{
-			if (i >= m_Resources.size())
-			{
-				std::cerr << "Invalid resource index at " << i << " when attempting to free " << baseName << "\n";
-				return false;
-			}
-
-			auto resource = std::dynamic_pointer_cast<T>(m_Resources[i]);
-			if (!resource)
-			{
-				std::cerr << "Bad cast when trying to free " << baseName << "\n";
-				return false;
-			}
-
-			freeFn(resource->Get(), std::forward<Args>(args)...);
-			m_Resources[i].reset();
-		}
-
-		// Remove the freed resources from our containers
-		m_Resources.erase(m_Resources.begin() + startId, m_Resources.begin() + endId);
-		m_ResourceHandles.erase(baseName);
-		m_ResourceCounts.erase(baseName);
-
-		// Update the IDs of the remaining resources
-		for (auto& pair : m_ResourceHandles)
-		{
-			if (pair.second() > startId)
-			{
-				pair.second = ResourceHandle<RenderPassResource>(this, pair.second() - count);
-			}
-		}
-
-		return true;
-	}
-
-	template <typename T, typename FreeFn, typename... Args>
-	bool TryFreeResources(const std::string& baseName, FreeFn&& freeFn, Args&&... args)
-	{
-		uint32_t count = 0;
-		bool has = HasResource<T>(baseName, &count);
-		if(!has)
-		{
-			return false;
-		}
-
-		return FreeResources<T>(baseName, count, freeFn, std::forward<Args>(args)...);
 	}
 
 	ResourceTable ZeroInitializeResourceTable(const std::initializer_list<std::string>& declarations)
@@ -385,7 +312,6 @@ private:
 	std::vector<std::unique_ptr<RenderPassResource>> m_Resources;
 	std::unordered_map<std::string, ResourceHandle<RenderPassResource>> m_ResourceHandles;
 	std::unordered_map<std::string, size_t> m_ResourceCounts;
-
 	std::unordered_map<uuid, std::unique_ptr<RenderPass>> m_Passes;
 
 	std::unordered_map<uuid, PassResourceTables> m_ResourceTable;

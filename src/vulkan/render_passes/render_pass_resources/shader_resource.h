@@ -11,7 +11,7 @@ public:
 	{
 	}
 
-	ShaderResource(RenderPassResource name, VulkanShader* shader)
+	ShaderResource(const std::string& name, VulkanShader* shader)
 		: RenderPassResource(name), m_Shader(shader)
 	{
 	}

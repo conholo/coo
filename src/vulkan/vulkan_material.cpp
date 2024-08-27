@@ -2,8 +2,8 @@
 #include "vulkan_context.h"
 #include "vulkan_swapchain.h"
 
-VulkanMaterial::VulkanMaterial(std::shared_ptr<VulkanMaterialLayout> layout)
-        : m_Layout(std::move(layout))
+VulkanMaterial::VulkanMaterial(VulkanMaterialLayout& layoutRef)
+        : m_LayoutRef(layoutRef)
 {
     AllocateDescriptorSets();
 }
@@ -14,7 +14,7 @@ VulkanMaterial::~VulkanMaterial()
 }
 
 VulkanMaterial::VulkanMaterial(VulkanMaterial&& other) noexcept
-        : m_Layout(std::move(other.m_Layout)),
+        : m_LayoutRef(other.m_LayoutRef),
           m_DescriptorPool(std::move(other.m_DescriptorPool)),
           m_DescriptorSets(std::move(other.m_DescriptorSets)),
           m_PushConstantData(std::move(other.m_PushConstantData))
@@ -25,7 +25,7 @@ VulkanMaterial& VulkanMaterial::operator=(VulkanMaterial&& other) noexcept
 {
     if (this != &other)
     {
-        m_Layout = std::move(other.m_Layout);
+		m_LayoutRef = other.m_LayoutRef;
         m_DescriptorPool = std::move(other.m_DescriptorPool);
         m_DescriptorSets = std::move(other.m_DescriptorSets);
         m_PushConstantData = std::move(other.m_PushConstantData);
@@ -36,7 +36,7 @@ VulkanMaterial& VulkanMaterial::operator=(VulkanMaterial&& other) noexcept
 void VulkanMaterial::AllocateDescriptorSets()
 {
     VulkanDescriptorPool::Builder poolBuilder;
-    for (const auto& [type, count] : m_Layout->GetShaderDescriptorInfo().totalDescriptorCounts)
+    for (const auto& [type, count] : m_LayoutRef.GetShaderDescriptorInfo().totalDescriptorCounts)
     {
 		if(count == 0) continue;
         poolBuilder.AddPoolSize(type, count * VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
@@ -48,11 +48,11 @@ void VulkanMaterial::AllocateDescriptorSets()
 		return;
 	}
 
-    poolBuilder.SetMaxSets(m_Layout->GetShaderDescriptorInfo().GetTotalUniqueSetCount() * VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
+    poolBuilder.SetMaxSets(m_LayoutRef.GetShaderDescriptorInfo().GetTotalUniqueSetCount() * VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
     m_DescriptorPool = poolBuilder.Build();
 
     m_DescriptorSets.resize(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT);
-    const auto& layouts = m_Layout->GetDescriptorSetLayouts();
+    const auto& layouts = m_LayoutRef.GetDescriptorSetLayouts();
 
     for(int i = 0; i < VulkanSwapchain::MAX_FRAMES_IN_FLIGHT; ++i)
     {
@@ -69,8 +69,7 @@ void VulkanMaterial::BindDescriptors(uint32_t frameIndex, VkCommandBuffer comman
 {
     vkCmdBindDescriptorSets(
             commandBuffer,
-            pipelineBindPoint,
-            m_Layout->GetPipelineLayout(),
+            pipelineBindPoint, m_LayoutRef.GetPipelineLayout(),
             0,
             static_cast<uint32_t>(m_DescriptorSets[frameIndex].size()),
             m_DescriptorSets[frameIndex].data(),
@@ -93,7 +92,7 @@ void VulkanMaterial::UpdateDescriptorSets(uint32_t frameIndex, const std::vector
             throw std::runtime_error("Descriptor set index out of range");
         }
 
-        VulkanDescriptorWriter writer(*m_Layout->GetDescriptorSetLayouts()[set], *m_DescriptorPool);
+        VulkanDescriptorWriter writer(*m_LayoutRef.GetDescriptorSetLayouts()[set], *m_DescriptorPool);
 
         for (const auto& update : descriptorUpdates)
         {
@@ -114,15 +113,14 @@ void VulkanMaterial::UpdateDescriptorSets(uint32_t frameIndex, const std::vector
 
 void VulkanMaterial::BindPushConstants(VkCommandBuffer commandBuffer)
 {
-    const auto& pushConstantRanges = m_Layout->GetPushConstantRanges();
+    const auto& pushConstantRanges = m_LayoutRef.GetPushConstantRanges();
     for (const auto& range : pushConstantRanges)
     {
         auto it = m_PushConstantData.find(range.name);
         if (it != m_PushConstantData.end())
         {
             vkCmdPushConstants(
-                    commandBuffer,
-                    m_Layout->GetPipelineLayout(),
+                    commandBuffer, m_LayoutRef.GetPipelineLayout(),
                     range.stageFlags,
                     range.offset,
                     range.size,
@@ -133,5 +131,5 @@ void VulkanMaterial::BindPushConstants(VkCommandBuffer commandBuffer)
 }
 std::shared_ptr<VulkanMaterial> VulkanMaterial::Clone() const
 {
-    return std::make_shared<VulkanMaterial>(m_Layout);
+    return std::make_shared<VulkanMaterial>(m_LayoutRef);
 }

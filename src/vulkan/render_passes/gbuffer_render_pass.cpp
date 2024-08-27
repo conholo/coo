@@ -42,7 +42,6 @@ void GBufferPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 	albedoAttachmentResource.UpdateState(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 	VulkanCommandBuffer& cmd = m_CommandBufferHandles[frameInfo.FrameIndex]->Get();
-
 	VulkanFramebuffer& fbo = m_FramebufferHandles[frameInfo.FrameIndex]->Get();
 
 	auto& renderPass = m_RenderPassHandle->Get();
@@ -70,27 +69,31 @@ void GBufferPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 				gameObject.Render(cmd.GetHandle(), frameInfo.FrameIndex, globalUbo.DescriptorInfo());
 			}
 		}
-		renderPass->EndPass(cmd->GetHandle());
+		renderPass.EndPass(cmd.GetHandle());
 	}
-	cmd->End();
+	cmd.End();
 
 	// Update internal host-side state to reflect the image transitions made during the render pass
-	positionAttachmentResource->Get()->UpdateState(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	normalAttachmentResource->Get()->UpdateState(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	albedoAttachmentResource->Get()->UpdateState(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	positionAttachmentResource.UpdateState(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	normalAttachmentResource.UpdateState(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	albedoAttachmentResource.UpdateState(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void GBufferPass::Submit(const FrameInfo& frameInfo, RenderGraph& graph)
 {
-	auto waitSemaphoreResource = graph.GetResource<SemaphoreResource>(SwapchainImageAvailableSemaphoreResourceName, frameInfo.FrameIndex);
-	auto signalSemaphoreResource = graph.GetResource(m_RenderCompleteSemaphoreHandles[frameInfo.FrameIndex]);
-	auto cmdBufferResource = graph.GetResource(m_CommandBufferHandles[frameInfo.FrameIndex]);
-	auto fenceResource = graph.GetResource(m_ResourcesInFlightFenceHandles[frameInfo.FrameIndex]);
+	auto waitSemaphoreResource = graph.GetResourceHandle<SemaphoreResource>(
+		SwapchainImageAvailableSemaphoreResourceName,
+		m_uuid,
+		frameInfo.FrameIndex);
 
-	std::vector<VkSemaphore> waitSemaphores = {waitSemaphoreResource->Get()->GetHandle() };
+	VulkanSemaphore& signalSemaphore = m_RenderCompleteSemaphoreHandles[frameInfo.FrameIndex]->Get();
+	VulkanFence& fence = m_ResourcesInFlightFenceHandles[frameInfo.FrameIndex]->Get();
+	VulkanCommandBuffer& cmd = m_CommandBufferHandles[frameInfo.FrameIndex]->Get();
+
+	std::vector<VkSemaphore> waitSemaphores = { waitSemaphoreResource.Get()->Get().GetHandle() };
 	std::vector<VkPipelineStageFlags> waitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	std::vector<VkSemaphore> signalSemaphores = {signalSemaphoreResource->Get()->GetHandle() };
-	std::vector<VulkanCommandBuffer*> cmdBuffers = { &*cmdBufferResource->Get() };
+	std::vector<VkSemaphore> signalSemaphores = {signalSemaphore.GetHandle() };
+	std::vector<VulkanCommandBuffer*> cmdBuffers = { &cmd };
 
 	VulkanCommandBuffer::Submit(
 		VulkanContext::Get().GraphicsQueue(),
@@ -98,7 +101,7 @@ void GBufferPass::Submit(const FrameInfo& frameInfo, RenderGraph& graph)
 		waitSemaphores,
 		waitStages,
 		signalSemaphores,
-		fenceResource->Get()->GetHandle());
+		fence.GetHandle());
 }
 
 void GBufferPass::CreateCommandBuffers(RenderGraph& graph)
@@ -106,11 +109,10 @@ void GBufferPass::CreateCommandBuffers(RenderGraph& graph)
 	auto& context = VulkanContext::Get();
 
 	auto createCommandBuffer =
-		[](size_t index, const std::string& resourceBaseName, VkCommandPool pool, bool isPrimary)
+		[](size_t index, const std::string& name, VkCommandPool pool, bool isPrimary)
 	{
-		auto resourceName = resourceBaseName + " " + std::to_string(index);
-		auto commandBuffer = std::make_shared<VulkanCommandBuffer>(pool, isPrimary, resourceName);
-		return std::make_shared<CommandBufferResource>(resourceName, commandBuffer);
+		auto commandBuffer = new VulkanCommandBuffer(pool, isPrimary, name);
+		return std::make_unique<CommandBufferResource>(name, commandBuffer);
 	};
 
 	m_CommandBufferHandles = graph.CreateResources<CommandBufferResource>(
@@ -123,26 +125,24 @@ void GBufferPass::CreateCommandBuffers(RenderGraph& graph)
 
 void GBufferPass::CreateSynchronizationPrimitives(RenderGraph& graph)
 {
-	auto createSemaphore = [](size_t index, const std::string& baseName)
+	auto createSemaphore = [](size_t index, const std::string& name)
 	{
-		auto resourceName = baseName + std::to_string(index);
-		auto semaphore = new VulkanSemaphore(resourceName);
-		return std::make_shared<VulkanSemaphore>(resourceName, semaphore);
+		auto semaphore = new VulkanSemaphore(name);
+		return std::make_unique<SemaphoreResource>(name, semaphore);
 	};
 
-	m_RenderCompleteSemaphoreHandles = graph.CreateResources<VulkanSemaphore>(
+	m_RenderCompleteSemaphoreHandles = graph.CreateResources<SemaphoreResource>(
 		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
 		GBufferRenderCompleteSemaphoreResourceName,
 		createSemaphore);
 
-	auto createFence = [](size_t index, const std::string& baseName)
+	auto createFence = [](size_t index, const std::string& name)
 	{
-		auto resourceName = baseName + std::to_string(index);
-		auto fence = new VulkanFence(resourceName, true);
-		return std::make_unique<VulkanFence>(resourceName, fence);
+		auto fence = new VulkanFence(name, true);
+		return std::make_unique<FenceResource>(name, fence);
 	};
 
-	m_ResourcesInFlightFenceHandles = graph.CreateResources<VulkanFence>(
+	m_ResourcesInFlightFenceHandles = graph.CreateResources<FenceResource>(
 		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
 		GBufferResourcesInFlightResourceName,
 		createFence);
@@ -164,19 +164,22 @@ void GBufferPass::CreateTextures(RenderGraph& graph)
 		};
 
 	auto createPositionTexture =
-		[&floatingPointAttachmentSpec](size_t index, const std::string& resourceBaseName)
+		[&floatingPointAttachmentSpec](size_t index, const std::string& name)
 	{
-		floatingPointAttachmentSpec.DebugName = resourceBaseName + " " + std::to_string(index);
+		floatingPointAttachmentSpec.DebugName = name;
 		auto texture = VulkanTexture2D::CreateAttachment(floatingPointAttachmentSpec);
-		return std::make_shared<TextureResource>(floatingPointAttachmentSpec.DebugName, texture);
+		auto* rawPointer = texture.release();
+
+		return std::make_unique<TextureResource>(floatingPointAttachmentSpec.DebugName, rawPointer);
 	};
 
 	auto createNormalTexture =
-		[&floatingPointAttachmentSpec](size_t index, const std::string& resourceBaseName)
+		[&floatingPointAttachmentSpec](size_t index, const std::string& name)
 	{
-		floatingPointAttachmentSpec.DebugName = resourceBaseName + " " + std::to_string(index);
+		floatingPointAttachmentSpec.DebugName = name;
 		auto texture = VulkanTexture2D::CreateAttachment(floatingPointAttachmentSpec);
-		return std::make_shared<TextureResource>(floatingPointAttachmentSpec.DebugName, texture);
+		auto* rawPointer = texture.release();
+		return std::make_unique<TextureResource>(floatingPointAttachmentSpec.DebugName, rawPointer);
 	};
 
 	TextureSpecification byteAttachmentSpec
@@ -190,11 +193,12 @@ void GBufferPass::CreateTextures(RenderGraph& graph)
 		};
 
 	auto createAlbedoTexture =
-		[&byteAttachmentSpec](size_t index, const std::string& resourceBaseName)
+		[&byteAttachmentSpec](size_t index, const std::string& name)
 	{
-		byteAttachmentSpec.DebugName = resourceBaseName + " " + std::to_string(index);
+		byteAttachmentSpec.DebugName = name;
 		auto texture = VulkanTexture2D::CreateAttachment(byteAttachmentSpec);
-		return std::make_shared<TextureResource>(byteAttachmentSpec.DebugName, texture);
+		auto* rawPointer = texture.release();
+		return std::make_unique<TextureResource>(byteAttachmentSpec.DebugName, rawPointer);
 	};
 
 	TextureSpecification depthTextureSpec
@@ -208,11 +212,12 @@ void GBufferPass::CreateTextures(RenderGraph& graph)
 		};
 
 	auto createDepthTexture =
-		[&depthTextureSpec](size_t index, const std::string& resourceBaseName)
+		[&depthTextureSpec](size_t index, const std::string& name)
 	{
-		depthTextureSpec.DebugName = resourceBaseName + " " + std::to_string(index);
+		depthTextureSpec.DebugName = name;
 		auto texture = VulkanTexture2D::CreateAttachment(depthTextureSpec);
-		return std::make_shared<TextureResource>(depthTextureSpec.DebugName, texture);
+		auto* rawPointer = texture.release();
+		return std::make_unique<TextureResource>(depthTextureSpec.DebugName, rawPointer);
 	};
 
 	m_PositionTextureHandles = graph.CreateResources<TextureResource>(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, GBufferPositionAttachmentTextureResourceName, createPositionTexture);
@@ -224,9 +229,9 @@ void GBufferPass::CreateTextures(RenderGraph& graph)
 void GBufferPass::CreateRenderPass(RenderGraph& graph)
 {
 	auto createRenderPass =
-		[](const std::string& resourceBaseName)
+		[](size_t index, const std::string& name)
 	{
-		auto renderPass = std::make_shared<VulkanRenderPass>(resourceBaseName);
+		auto* renderPass = new VulkanRenderPass(name);
 
 		// Position attachment
 		renderPass->AddAttachment({.Type = AttachmentType::Color,
@@ -289,7 +294,7 @@ void GBufferPass::CreateRenderPass(RenderGraph& graph)
 			VK_DEPENDENCY_BY_REGION_BIT);
 
 		renderPass->Build();
-		return std::make_shared<RenderPassObjectResource>(resourceBaseName, renderPass);
+		return std::make_unique<RenderPassObjectResource>(name, renderPass);
 	};
 	m_RenderPassHandle = graph.CreateResource<RenderPassObjectResource>(GBufferRenderPassResourceName, createRenderPass);
 }
@@ -297,10 +302,10 @@ void GBufferPass::CreateRenderPass(RenderGraph& graph)
 void GBufferPass::CreateShaders(RenderGraph& graph)
 {
 	auto createShader =
-		[](const std::string& resourceBaseName, const std::string& filePath, ShaderType shaderType)
+		[](size_t index, const std::string& name, const std::string& filePath, ShaderType shaderType)
 	{
-		auto shader = std::make_shared<VulkanShader>(filePath, shaderType);
-		return std::make_shared<ShaderResource>(resourceBaseName, shader);
+		auto* shader = new VulkanShader(filePath, shaderType);
+		return std::make_unique<ShaderResource>(name, shader);
 	};
 
 	auto shaderDirectory = FileSystemUtil::GetShaderDirectory();
@@ -314,54 +319,54 @@ void GBufferPass::CreateShaders(RenderGraph& graph)
 void GBufferPass::CreateMaterialLayout(RenderGraph& graph)
 {
 	auto createMaterialLayout =
-		[](const std::string& resourceBaseName, VulkanShader& vertShader, VulkanShader& fragShader)
+		[](size_t index, const std::string& name, VulkanShader& vertShader, VulkanShader& fragShader)
 	{
-		auto materialLayout = std::make_shared<VulkanMaterialLayout>(vertShader, fragShader, resourceBaseName);
-		return std::make_shared<MaterialLayoutResource>(resourceBaseName, materialLayout);
+		auto materialLayout = new VulkanMaterialLayout(vertShader, fragShader, name);
+		return std::make_unique<MaterialLayoutResource>(name, materialLayout);
 	};
 
-	auto vertResource = graph.GetResource<ShaderResource>(m_VertexHandle);
-	auto fragResource = graph.GetResource<ShaderResource>(m_FragmentHandle);
+	auto& vertShader = m_VertexHandle.Get()->Get();
+	auto& fragShader = m_FragmentHandle.Get()->Get();
 
 	m_MaterialLayoutHandle = graph.CreateResource<MaterialLayoutResource>(
 		GBufferMaterialLayoutResourceName,
 		createMaterialLayout,
-		*vertResource->Get(),
-		*fragResource->Get());
+		vertShader,
+		fragShader);
 }
 
 void GBufferPass::CreateMaterial(RenderGraph& graph)
 {
 	auto createMaterial =
-		[](const std::string& resourceBaseName, const std::shared_ptr<VulkanMaterialLayout>& materialLayout)
+		[](size_t index, const std::string& name, VulkanMaterialLayout& materialLayout)
 	{
-		auto material = std::make_shared<VulkanMaterial>(materialLayout);
-		return std::make_shared<MaterialResource>(resourceBaseName, material);
+		auto material = new VulkanMaterial(materialLayout);
+		return std::make_unique<MaterialResource>(name, material);
 	};
 
-	auto materialLayoutResource = graph.GetResource<MaterialLayoutResource>(m_MaterialLayoutHandle);
+	auto& materialLayout = m_MaterialLayoutHandle.Get()->Get();
 
 	m_MaterialHandle = graph.CreateResource<MaterialResource>(
 		GBufferMaterialResourceName,
 		createMaterial,
-		materialLayoutResource->Get());
+		materialLayout);
 }
 
 void GBufferPass::CreateGraphicsPipeline(RenderGraph& graph)
 {
-	auto renderPassResource = graph.GetResource<RenderPassObjectResource>(m_RenderPassHandle);
-	auto materialLayoutResource = graph.GetResource<MaterialLayoutResource>(m_MaterialLayoutHandle);
-	auto vertShaderResource = graph.GetResource<ShaderResource>(m_VertexHandle);
-	auto fragShaderResource = graph.GetResource<ShaderResource>(m_FragmentHandle);
+	auto* renderPass = &m_RenderPassHandle.Get()->Get();
+	auto* materialLayout = &m_MaterialLayoutHandle.Get()->Get();
+	auto* vertShader = &m_VertexHandle.Get()->Get();
+	auto* fragShader = &m_FragmentHandle.Get()->Get();
 
 	auto createPipeline =
-		[](	const std::string& resourceBaseName,
+		[](size_t index, const std::string& name,
 			VulkanRenderPass* renderPass,
 			VulkanMaterialLayout* layout,
 			VulkanShader* vertexShader,
 			VulkanShader* fragmentShader)
 	{
-		auto builder = VulkanGraphicsPipelineBuilder(resourceBaseName)
+		auto builder = VulkanGraphicsPipelineBuilder(name)
 						   .SetShaders(*vertexShader, *fragmentShader)
 						   .SetVertexInputDescription({VulkanModel::Vertex::GetBindingDescriptions(), VulkanModel::Vertex::GetAttributeDescriptions()})
 						   .SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
@@ -373,16 +378,17 @@ void GBufferPass::CreateGraphicsPipeline(RenderGraph& graph)
 						   .SetLayout(layout->GetPipelineLayout());
 
 		auto pipeline = builder.Build();
-		return std::make_shared<GraphicsPipelineObjectResource>(resourceBaseName, pipeline);
+		auto* rawPtr = pipeline.release();
+		return std::make_unique<GraphicsPipelineResource>(name, rawPtr);
 	};
 
-	m_PipelineHandle = graph.CreateResource<GraphicsPipelineObjectResource>(
+	m_PipelineHandle = graph.CreateResource<GraphicsPipelineResource>(
 		GBufferGraphicsPipelineResourceName,
 		createPipeline,
-		renderPassResource->Get().get(),
-		materialLayoutResource->Get().get(),
-		vertShaderResource->Get().get(),
-		fragShaderResource->Get().get());
+		renderPass,
+		materialLayout,
+		vertShader,
+		fragShader);
 }
 
 void GBufferPass::CreateFramebuffers(RenderGraph& graph)
@@ -391,18 +397,12 @@ void GBufferPass::CreateFramebuffers(RenderGraph& graph)
 	VkExtent2D extent = swapchain.Extent();
 
 	auto createFramebuffer =
-		[&extent, &graph](size_t index,
-			const std::string& resourceBaseName,
-			VulkanRenderPass* renderPass,
-			const std::vector<ResourceHandle<TextureResource>>& positionTextureHandles,
-			const std::vector<ResourceHandle<TextureResource>>& normalTextureHandles,
-			const std::vector<ResourceHandle<TextureResource>>& albedoTextureHandles,
-			const std::vector<ResourceHandle<TextureResource>>& depthTextureHandles)
+		[this, &extent](uint32_t index, const std::string& name, VulkanRenderPass* renderPass)
 	{
-		auto positionView = graph.GetResource(positionTextureHandles[index])->Get()->GetImage()->GetView();
-		auto normalView = graph.GetResource(normalTextureHandles[index])->Get()->GetImage()->GetView();
-		auto albedoView = graph.GetResource(albedoTextureHandles[index])->Get()->GetImage()->GetView();
-		auto depthView = graph.GetResource(depthTextureHandles[index])->Get()->GetImage()->GetView();
+		auto positionView = m_PositionTextureHandles[index].Get()->Get().GetImage()->GetView();
+		auto normalView = m_NormalTextureHandles[index].Get()->Get().GetImage()->GetView();
+		auto albedoView = m_AlbedoTextureHandles[index].Get()->Get().GetImage()->GetView();
+		auto depthView = m_DepthTextureHandles[index].Get()->Get().GetImage()->GetView();
 
 		std::vector<VkImageView> attachments = {
 			positionView->GetImageView(),
@@ -411,36 +411,31 @@ void GBufferPass::CreateFramebuffers(RenderGraph& graph)
 			depthView->GetImageView()
 		};
 
-		auto resourceName = resourceBaseName + " " + std::to_string(index);
-		auto framebuffer = std::make_shared<VulkanFramebuffer>(resourceName);
+		auto framebuffer = new VulkanFramebuffer(name);
 		framebuffer->Create(renderPass->GetHandle(), attachments, extent.width, extent.height);
-		return std::make_shared<FramebufferResource>(resourceBaseName, framebuffer);
+		return std::make_unique<FramebufferResource>(name, framebuffer);
 	};
 
-	auto renderPassResource = graph.GetResource(m_RenderPassHandle);
+	auto renderPassResource = &m_RenderPassHandle.Get()->Get();
 
 	m_FramebufferHandles = graph.CreateResources<FramebufferResource>(
 		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
 		GBufferFramebufferResourceName,
 		createFramebuffer,
-		renderPassResource->Get().get(),
-		m_PositionTextureHandles,
-		m_NormalTextureHandles,
-		m_AlbedoTextureHandles,
-		m_DepthTextureHandles);
+		renderPassResource);
 }
 
 void GBufferPass::OnSwapchainResize(uint32_t width, uint32_t height, RenderGraph& graph)
 {
 	for (auto cmdBufferHandle : m_CommandBufferHandles)
 	{
-		auto cmdResource = graph.GetResource<CommandBufferResource>(cmdBufferHandle);
+		auto& cmdResource = cmdBufferHandle.Get()->Get();
 
 		VkFenceCreateInfo fenceCreateInfo{};
 		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 		VkFence fence;
 		VK_CHECK_RESULT(vkCreateFence(VulkanContext::Get().Device(), &fenceCreateInfo, nullptr, &fence));
-		VK_CHECK_RESULT(cmdResource->Get()->InterruptAndReset(fence, true));
+		VK_CHECK_RESULT(cmdResource.InterruptAndReset(fence, true));
 		vkDestroyFence(VulkanContext::Get().Device(), fence, nullptr);
 	}
 
@@ -452,26 +447,22 @@ void GBufferPass::OnSwapchainResize(uint32_t width, uint32_t height, RenderGraph
 
 	for(auto albedoHandle: m_AlbedoTextureHandles)
 	{
-		auto textureResource = graph.GetResource(albedoHandle);
-		textureResource->Get()->Resize(width, height);
+		albedoHandle.Get()->Get().Resize(width, height);
 	}
 
 	for(auto positionHandle: m_PositionTextureHandles)
 	{
-		auto textureResource = graph.GetResource(positionHandle);
-		textureResource->Get()->Resize(width, height);
+		positionHandle.Get()->Get().Resize(width, height);
 	}
 
 	for(auto normalHandle: m_NormalTextureHandles)
 	{
-		auto textureResource = graph.GetResource(normalHandle);
-		textureResource->Get()->Resize(width, height);
+		normalHandle.Get()->Get().Resize(width, height);
 	}
 
 	for(auto depthHandle : m_DepthTextureHandles)
 	{
-		auto textureResource = graph.GetResource(depthHandle);
-		textureResource->Get()->Resize(width, height);
+		depthHandle.Get()->Get().Resize(width, height);
 	}
 
 	graph.TryFreeResources<RenderPassObjectResource>(GBufferRenderPassResourceName,  [](const std::shared_ptr<VulkanRenderPass>& renderPass){});

@@ -360,9 +360,9 @@ VulkanGraphicsPipelineBuilder& VulkanGraphicsPipelineBuilder::SetRenderPass(Vulk
     return *this;
 }
 
-std::shared_ptr<VulkanGraphicsPipeline> VulkanGraphicsPipelineBuilder::Build()
+std::unique_ptr<VulkanGraphicsPipeline> VulkanGraphicsPipelineBuilder::Build()
 {
-    auto pipeline = std::make_shared<VulkanGraphicsPipeline>(m_DebugName);
+    auto pipeline = std::make_unique<VulkanGraphicsPipeline>(m_DebugName);
     pipeline->SetShaderStages(std::move(m_ShaderStages));
     pipeline->SetVertexInputState(m_VertexInputState, std::move(m_BindingDescriptions), std::move(m_AttributeDescriptions));
     pipeline->SetInputAssemblyState(m_InputAssemblyState);
