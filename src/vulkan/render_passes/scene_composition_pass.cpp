@@ -22,44 +22,34 @@ void SceneCompositionPass::CreateResources(RenderGraph& graph)
 
 void SceneCompositionPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 {
-	ResourceHandle<TextureResource> colorAttachmentHandle = m_ColorAttachmentHandles[frameInfo.FrameIndex];
-	auto* colorAttachmentResource = graph.GetResource<TextureResource>(colorAttachmentHandle);
-	colorAttachmentResource->Get()->TransitionLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	VulkanTexture2D& colorAttachment = m_ColorAttachmentHandles[frameInfo.FrameIndex]->Get();
+	colorAttachment.TransitionLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-	auto* lightingColorAttachment = graph.GetResource<TextureResource>(LightingColorAttachmentResourceName, frameInfo.FrameIndex);
+	TextureResource* lightingColorAttachmentHandle = graph.GetGlobalResourceHandle<TextureResource>(LightingColorAttachmentResourceName, frameInfo.FrameIndex).Get();
+	VulkanCommandBuffer& cmd = m_CommandBufferHandles[frameInfo.FrameIndex]->Get();
+	VulkanFramebuffer& fbo = m_FramebufferHandles[frameInfo.FrameIndex]->Get();
 
-	ResourceHandle<CommandBufferResource> cmdHandle = m_CommandBufferHandles[frameInfo.FrameIndex];
-	auto* cmdBufferResource = graph.GetResource<CommandBufferResource>(cmdHandle);
+	VulkanRenderPass& renderPass = m_RenderPassHandle->Get();
+	VulkanGraphicsPipeline& pipeline = m_PipelineHandle->Get();
+	VulkanMaterial& material = m_MaterialHandle->Get();
+	VulkanFence& fence = m_ResourcesInFlightFenceHandles[frameInfo.FrameIndex]->Get();
 
-	ResourceHandle<FramebufferResource> fboHandle = m_FramebufferHandles[frameInfo.FrameIndex];
-	auto* fboResource = graph.GetResource<FramebufferResource>(fboHandle);
+	cmd.WaitForCompletion(fence.GetHandle());
 
-	auto* renderPassResource = graph.GetResource<RenderPassObjectResource>(m_RenderPassHandle);
-	auto* graphicsPipelineResource = graph.GetResource<GraphicsPipelineObjectResource>(m_PipelineHandle);
-	auto* materialResource = graph.GetResource<MaterialResource>(m_MaterialHandle);
-	auto* fenceResource = graph.GetResource<FenceResource>(m_ResourcesInFlightFenceHandles[frameInfo.FrameIndex]);
-
-	auto cmd = cmdBufferResource->Get();
-	cmd->WaitForCompletion(fenceResource->Get()->GetHandle());
-	auto fbo = fboResource->Get();
-	auto renderPass = renderPassResource->Get();
-	auto pipeline = graphicsPipelineResource->Get();
-	auto material = materialResource->Get();
-
-	cmd->Begin();
+	cmd.Begin();
 	{
 		VkRenderPassBeginInfo sceneCompositionRenderPassInfo{};
 		sceneCompositionRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		sceneCompositionRenderPassInfo.renderPass = renderPass->GetHandle();
-		sceneCompositionRenderPassInfo.framebuffer = fbo->GetHandle();
+		sceneCompositionRenderPassInfo.renderPass = renderPass.GetHandle();
+		sceneCompositionRenderPassInfo.framebuffer = fbo.GetHandle();
 		sceneCompositionRenderPassInfo.renderArea.offset = {0, 0};
-		auto attachmentExtent = VkExtent2D{fbo->Width(), fbo->Height()};
+		auto attachmentExtent = VkExtent2D{fbo.Width(), fbo.Height()};
 		sceneCompositionRenderPassInfo.renderArea.extent = attachmentExtent;
 
-		pipeline->Bind(cmd->GetHandle());
-		renderPass->BeginPass(cmd->GetHandle(), sceneCompositionRenderPassInfo, attachmentExtent);
+		pipeline.Bind(cmd.GetHandle());
+		renderPass.BeginPass(cmd.GetHandle(), sceneCompositionRenderPassInfo, attachmentExtent);
 		{
-			material->UpdateDescriptorSets(
+			material.UpdateDescriptorSets(
 				frameInfo.FrameIndex,
 				{
 					{0,
@@ -67,30 +57,30 @@ void SceneCompositionPass::Record(const FrameInfo& frameInfo, RenderGraph& graph
 							{
 								.binding = 0,
 								.type = DescriptorUpdate::Type::Image,
-								.imageInfo = lightingColorAttachment->Get()->GetBaseViewDescriptorInfo()}
+								.imageInfo = lightingColorAttachmentHandle->Get().GetBaseViewDescriptorInfo()}
 						}
 					}
 				});
-			material->BindDescriptors(frameInfo.FrameIndex, cmd->GetHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS);
-			vkCmdDraw(cmd->GetHandle(), 3, 1, 0, 0);
+			material.BindDescriptors(frameInfo.FrameIndex, cmd.GetHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS);
+			vkCmdDraw(cmd.GetHandle(), 3, 1, 0, 0);
 		}
-		renderPass->EndPass(cmd->GetHandle());
-		colorAttachmentResource->Get()->UpdateState(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		renderPass.EndPass(cmd.GetHandle());
+		colorAttachment.UpdateState(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
-	cmd->End();
+	cmd.End();
 }
 
 void SceneCompositionPass::Submit(const FrameInfo& frameInfo, RenderGraph& graph)
 {
-	auto waitSemaphoreResource = graph.GetResource<SemaphoreResource>(LightingRenderCompleteSemaphoreResourceName, frameInfo.FrameIndex);
-	auto signalSemaphoreResource = graph.GetResource(m_RenderCompleteSemaphoreHandles[frameInfo.FrameIndex]);
-	auto cmdBufferResource = graph.GetResource(m_CommandBufferHandles[frameInfo.FrameIndex]);
+	VulkanSemaphore& waitSemaphore = graph.GetGlobalResourceHandle<SemaphoreResource>(LightingRenderCompleteSemaphoreResourceName, frameInfo.FrameIndex)->Get();
+	VulkanSemaphore& signalSemaphore = m_RenderCompleteSemaphoreHandles[frameInfo.FrameIndex]->Get();
+	VulkanCommandBuffer& cmd = m_CommandBufferHandles[frameInfo.FrameIndex]->Get();
 
-	std::vector<VkSemaphore> waitSemaphores = {waitSemaphoreResource->Get()->GetHandle() };
+	std::vector<VkSemaphore> waitSemaphores = { waitSemaphore.GetHandle() };
 	std::vector<VkPipelineStageFlags> waitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	std::vector<VkSemaphore> signalSemaphores = {signalSemaphoreResource->Get()->GetHandle() };
-	std::vector<VulkanCommandBuffer*> cmdBuffers = { &*cmdBufferResource->Get() };
-	auto fenceResource = graph.GetResource(m_ResourcesInFlightFenceHandles[frameInfo.FrameIndex]);
+	std::vector<VkSemaphore> signalSemaphores = {signalSemaphore.GetHandle() };
+	std::vector<VulkanCommandBuffer*> cmdBuffers = { &cmd };
+	VulkanFence& fenceResource = m_ResourcesInFlightFenceHandles[frameInfo.FrameIndex]->Get();
 
 	VulkanCommandBuffer::Submit(
 		VulkanContext::Get().GraphicsQueue(),
@@ -98,7 +88,7 @@ void SceneCompositionPass::Submit(const FrameInfo& frameInfo, RenderGraph& graph
 		waitSemaphores,
 		waitStages,
 		signalSemaphores,
-		fenceResource->Get()->GetHandle());
+		fenceResource.GetHandle());
 }
 
 void SceneCompositionPass::CreateCommandBuffers(RenderGraph& graph)
@@ -106,11 +96,10 @@ void SceneCompositionPass::CreateCommandBuffers(RenderGraph& graph)
 	auto& context = VulkanContext::Get();
 
 	auto createCommandBuffer =
-		[](size_t index, const std::string& resourceBaseName, VkCommandPool pool, bool isPrimary)
+		[](size_t index, const std::string& name, VkCommandPool pool, bool isPrimary)
 	{
-		auto resourceName = resourceBaseName + " " + std::to_string(index);
-		auto commandBuffer = std::make_shared<VulkanCommandBuffer>(pool, isPrimary, resourceName);
-		return std::make_shared<CommandBufferResource>(resourceName, commandBuffer);
+		auto commandBuffer = new VulkanCommandBuffer(pool, isPrimary, name);
+		return std::make_unique<CommandBufferResource>(name, commandBuffer);
 	};
 
 	m_CommandBufferHandles = graph.CreateResources<CommandBufferResource>(
@@ -123,14 +112,10 @@ void SceneCompositionPass::CreateCommandBuffers(RenderGraph& graph)
 
 void SceneCompositionPass::CreateSynchronizationPrimitives(RenderGraph& graph)
 {
-	auto createSemaphore = [](size_t index, const std::string& baseName)
+	auto createSemaphore = [](size_t index, const std::string& name)
 	{
-		VkSemaphoreCreateInfo semaphoreInfo = {};
-		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-		auto resourceName = baseName + std::to_string(index);
-		auto semaphore = std::make_shared<VulkanSemaphore>(resourceName);
-		return std::make_shared<SemaphoreResource>(resourceName, semaphore);
+		auto semaphore = new VulkanSemaphore(name);
+		return std::make_unique<SemaphoreResource>(name, semaphore);
 	};
 
 	m_RenderCompleteSemaphoreHandles = graph.CreateResources<SemaphoreResource>(
@@ -138,12 +123,10 @@ void SceneCompositionPass::CreateSynchronizationPrimitives(RenderGraph& graph)
 		SceneCompositionRenderCompleteSemaphoreResourceName,
 		createSemaphore);
 
-	auto createFence = [](size_t index, const std::string& baseName)
+	auto createFence = [](size_t index, const std::string& name)
 	{
-		auto resourceName = baseName + std::to_string(index);
-		// Start in signaled state
-		auto fence = std::make_shared<VulkanFence>(resourceName, true);
-		return std::make_shared<FenceResource>(resourceName, fence);
+		auto fence = new VulkanFence(name, true);
+		return std::make_unique<FenceResource>(name, fence);
 	};
 
 	m_ResourcesInFlightFenceHandles = graph.CreateResources<FenceResource>(
@@ -168,25 +151,30 @@ void SceneCompositionPass::CreateTextures(RenderGraph& graph)
 	};
 
 	auto createColorTexture =
-		[&byteAttachmentSpec](size_t index, const std::string& resourceBaseName)
+		[&byteAttachmentSpec](size_t index, const std::string& name)
 	{
-		byteAttachmentSpec.DebugName = resourceBaseName + " " + std::to_string(index);
+		byteAttachmentSpec.DebugName = name;
 		auto texture = VulkanTexture2D::CreateAttachment(byteAttachmentSpec);
-		return std::make_shared<TextureResource>(byteAttachmentSpec.DebugName, texture);
+		auto* rawPtr = texture.release();
+		return std::make_unique<TextureResource>(byteAttachmentSpec.DebugName, rawPtr);
 	};
 
-	m_ColorAttachmentHandles = graph.CreateResources<TextureResource>(VulkanSwapchain::MAX_FRAMES_IN_FLIGHT, SceneCompositionColorAttachmentResourceName, createColorTexture);
+	m_ColorAttachmentHandles = graph.CreateResources<TextureResource>(
+		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
+		SceneCompositionColorAttachmentResourceName,
+		createColorTexture);
 }
 
 void SceneCompositionPass::CreateRenderPass(RenderGraph& graph)
 {
 	auto createRenderPass =
-		[](const std::string& resourceBaseName)
+		[](size_t index, const std::string& name)
 	{
-		auto renderPass = std::make_shared<VulkanRenderPass>(resourceBaseName);
+		auto renderPass = new VulkanRenderPass (name);
 
 		// Color attachment
-		renderPass->AddAttachment({.Type = AttachmentType::Color,
+		renderPass->AddAttachment({
+			.Type = AttachmentType::Color,
 			.Format = ImageFormat::RGBA,
 			.Samples = VK_SAMPLE_COUNT_1_BIT,
 			.LoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -212,7 +200,7 @@ void SceneCompositionPass::CreateRenderPass(RenderGraph& graph)
 			VK_DEPENDENCY_BY_REGION_BIT);
 
 		renderPass->Build();
-		return std::make_shared<RenderPassObjectResource>(resourceBaseName, renderPass);
+		return std::make_unique<RenderPassObjectResource>(name, renderPass);
 	};
 
 	m_RenderPassHandle = graph.CreateResource<RenderPassObjectResource>(SceneCompositionRenderPassResourceName, createRenderPass);
@@ -221,10 +209,10 @@ void SceneCompositionPass::CreateRenderPass(RenderGraph& graph)
 void SceneCompositionPass::CreateShaders(RenderGraph& graph)
 {
 	auto createShader =
-		[](const std::string& resourceBaseName, const std::string& filePath, ShaderType shaderType)
+		[](size_t index, const std::string& name, const std::string& filePath, ShaderType shaderType)
 	{
-		auto shader = std::make_shared<VulkanShader>(filePath, shaderType);
-		return std::make_shared<ShaderResource>(resourceBaseName, shader);
+		auto shader = new VulkanShader(filePath, shaderType);
+		return std::make_unique<ShaderResource>(name, shader);
 	};
 
 	auto shaderDirectory = FileSystemUtil::GetShaderDirectory();
@@ -235,54 +223,56 @@ void SceneCompositionPass::CreateShaders(RenderGraph& graph)
 void SceneCompositionPass::CreateMaterialLayout(RenderGraph& graph)
 {
 	auto createMaterialLayout =
-		[](const std::string& resourceBaseName, VulkanShader& vertShader, VulkanShader& fragShader)
+		[](size_t index, const std::string& name, VulkanShader& vertShader, VulkanShader& fragShader)
 	{
-		auto materialLayout = std::make_shared<VulkanMaterialLayout>(vertShader, fragShader, resourceBaseName);
-		return std::make_shared<MaterialLayoutResource>(resourceBaseName, materialLayout);
+		auto materialLayout = new VulkanMaterialLayout(vertShader, fragShader, name);
+		return std::make_unique<MaterialLayoutResource>(name, materialLayout);
 	};
 
-	auto vertResource = graph.GetResource<ShaderResource>(FullScreenQuadShaderResourceName);
-	auto fragResource = graph.GetResource<ShaderResource>(m_FragmentHandle);
+	ResourceHandle<ShaderResource> vertResource = graph.GetGlobalResourceHandle<ShaderResource>(FullScreenQuadShaderResourceName);
+	VulkanShader& vertShader = vertResource->Get();
+	VulkanShader& fragShader = m_FragmentHandle->Get();
 
 	m_MaterialLayoutHandle = graph.CreateResource<MaterialLayoutResource>(
 		SceneCompositionMaterialLayoutResourceName,
 		createMaterialLayout,
-		*vertResource->Get(),
-		*fragResource->Get());
+		vertShader,
+		fragShader);
 }
 
 void SceneCompositionPass::CreateMaterial(RenderGraph& graph)
 {
 	auto createMaterial =
-		[](const std::string& resourceBaseName, const std::shared_ptr<VulkanMaterialLayout>& materialLayout)
+		[](size_t index, const std::string& name, VulkanMaterialLayout& materialLayoutRef)
 	{
-		auto material = std::make_shared<VulkanMaterial>(materialLayout);
-		return std::make_shared<MaterialResource>(resourceBaseName, material);
+		auto material = new VulkanMaterial(materialLayoutRef);
+		return std::make_unique<MaterialResource>(name, material);
 	};
 
-	auto materialLayoutResource = graph.GetResource<MaterialLayoutResource>(m_MaterialLayoutHandle);
+	VulkanMaterialLayout& materialLayoutRef = m_MaterialLayoutHandle->Get();
 
 	m_MaterialHandle = graph.CreateResource<MaterialResource>(
 		SceneCompositionMaterialResourceName,
 		createMaterial,
-		materialLayoutResource->Get());
+		materialLayoutRef);
 }
 
 void SceneCompositionPass::CreateGraphicsPipeline(RenderGraph& graph)
 {
-	auto sceneCompRenderPass = graph.GetResource<RenderPassObjectResource>(m_RenderPassHandle);
-	auto materialLayoutResource = graph.GetResource<MaterialLayoutResource>(m_MaterialLayoutHandle);
-	auto vertShaderResource = graph.GetResource<ShaderResource>(FullScreenQuadShaderResourceName);
-	auto fragShaderResource = graph.GetResource<ShaderResource>(m_FragmentHandle);
+	VulkanRenderPass& renderPass = m_RenderPassHandle->Get();
+	VulkanMaterialLayout& materialLayout = m_MaterialLayoutHandle->Get();
+	ResourceHandle<ShaderResource> vertShaderResource = graph.GetGlobalResourceHandle<ShaderResource>(FullScreenQuadShaderResourceName);
+	VulkanShader& vertShader = vertShaderResource->Get();
+	VulkanShader& fragShader = m_FragmentHandle->Get();
 
 	auto createPipeline =
-		[](	const std::string& resourceBaseName,
+		[](	size_t index, const std::string& name,
 			VulkanRenderPass* renderPass,
 			VulkanMaterialLayout* layout,
 			VulkanShader* vertexShader,
 			VulkanShader* fragmentShader)
 	{
-		auto builder = VulkanGraphicsPipelineBuilder(resourceBaseName)
+		auto builder = VulkanGraphicsPipelineBuilder(name)
 						   .SetShaders(*vertexShader, *fragmentShader)
 						   .SetVertexInputDescription({})
 						   .SetPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
@@ -294,16 +284,17 @@ void SceneCompositionPass::CreateGraphicsPipeline(RenderGraph& graph)
 						   .SetLayout(layout->GetPipelineLayout());
 
 		auto pipeline = builder.Build();
-		return std::make_shared<GraphicsPipelineObjectResource>(resourceBaseName, pipeline);
+		auto* rawPtr = pipeline.release();
+		return std::make_unique<GraphicsPipelineResource>(name, rawPtr);
 	};
 
-	m_PipelineHandle = graph.CreateResource<GraphicsPipelineObjectResource>(
+	m_PipelineHandle = graph.CreateResource<GraphicsPipelineResource>(
 		SceneCompositionGraphicsPipelineResourceName,
 		createPipeline,
-		sceneCompRenderPass->Get().get(),
-		materialLayoutResource->Get().get(),
-		vertShaderResource->Get().get(),
-		fragShaderResource->Get().get());
+		&renderPass,
+		&materialLayout,
+		&vertShader,
+		&fragShader);
 }
 
 void SceneCompositionPass::CreateFramebuffers(RenderGraph& graph)
@@ -312,46 +303,38 @@ void SceneCompositionPass::CreateFramebuffers(RenderGraph& graph)
 	VkExtent2D extent = swapchain.Extent();
 
 	auto createFramebuffer =
-		[&extent, &graph](
-			size_t index,
-			const std::string& resourceBaseName,
-			VulkanRenderPass* renderPass,
-			const std::vector<ResourceHandle<TextureResource>>& colorTextureHandles)
+		[&extent, this](size_t index, const std::string& name, VulkanRenderPass* renderPass)
 	{
-
-		auto colorView = graph.GetResource(colorTextureHandles[index])->Get()->GetImage()->GetView();
+		auto colorView = m_ColorAttachmentHandles[index]->Get().GetImage()->GetView();
 
 		std::vector<VkImageView> attachments = {
 			colorView->GetImageView()
 		};
 
-		auto resourceName = resourceBaseName + " " + std::to_string(index);
-		auto framebuffer = std::make_shared<VulkanFramebuffer>(resourceName);
+		auto framebuffer = new VulkanFramebuffer(name);
 		framebuffer->Create(renderPass->GetHandle(), attachments, extent.width, extent.height);
-		return std::make_shared<FramebufferResource>(resourceBaseName, framebuffer);
+		return std::make_unique<FramebufferResource>(name, framebuffer);
 	};
 
-	auto renderPassResource = graph.GetResource(m_RenderPassHandle);
-
+	VulkanRenderPass& renderPass = m_RenderPassHandle->Get();
 	m_FramebufferHandles = graph.CreateResources<FramebufferResource>(
 		VulkanSwapchain::MAX_FRAMES_IN_FLIGHT,
 		SceneCompositionFramebufferResourceName,
 		createFramebuffer,
-		renderPassResource->Get().get(),
-		m_ColorAttachmentHandles);
+		&renderPass);
 }
 
 void SceneCompositionPass::OnSwapchainResize(uint32_t width, uint32_t height, RenderGraph& graph)
 {
 	for (auto cmdBufferHandle : m_CommandBufferHandles)
 	{
-		auto cmdResource = graph.GetResource(cmdBufferHandle);
+		VulkanCommandBuffer& cmd = cmdBufferHandle->Get();
 
 		VkFenceCreateInfo fenceCreateInfo{};
 		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 		VkFence fence;
 		VK_CHECK_RESULT(vkCreateFence(VulkanContext::Get().Device(), &fenceCreateInfo, nullptr, &fence));
-		VK_CHECK_RESULT(cmdResource->Get()->InterruptAndReset(fence, true));
+		VK_CHECK_RESULT(cmd.InterruptAndReset(fence, true));
 		vkDestroyFence(VulkanContext::Get().Device(), fence, nullptr);
 	}
 
@@ -361,10 +344,10 @@ void SceneCompositionPass::OnSwapchainResize(uint32_t width, uint32_t height, Re
 	graph.TryFreeResources<SemaphoreResource>(SceneCompositionRenderCompleteSemaphoreResourceName, freeSemaphores);
 	CreateSynchronizationPrimitives(graph);
 
-	for(auto colorHandles : m_ColorAttachmentHandles)
+	for(auto colorHandle : m_ColorAttachmentHandles)
 	{
-		auto textureResource = graph.GetResource(colorHandles);
-		textureResource->Get()->Resize(width, height);
+		auto& texture = colorHandle->Get();
+		texture.Resize(width, height);
 	}
 
 	graph.TryFreeResources<RenderPassObjectResource>(SceneCompositionRenderPassResourceName,  [](const std::shared_ptr<VulkanRenderPass>& renderPass){});

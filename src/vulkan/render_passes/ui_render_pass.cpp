@@ -4,6 +4,7 @@
 #include "core/platform_path.h"
 #include "render_graph.h"
 #include "render_graph_resource_declarations.h"
+#include "render_pass_resources/all_resources.h"
 #include "vulkan/vulkan_fence.h"
 #include "vulkan/vulkan_semaphore.h"
 #include "vulkan/vulkan_render_pass.h"
@@ -21,14 +22,13 @@ void UIRenderPass::CreateResources(RenderGraph& graph)
 
 void UIRenderPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 {
-	auto cmdResource = graph.GetResource<CommandBufferResource>(SwapchainCommandBufferResourceName, frameInfo.FrameIndex);
-	auto* graphicsPipelineResource = graph.GetResource<GraphicsPipelineObjectResource>(m_PipelineHandle);
-	auto* materialResource = graph.GetResource<MaterialResource>(m_MaterialHandle);
+	ResourceHandle<CommandBufferResource> cmdHandle = graph.GetGlobalResourceHandle<CommandBufferResource>(SwapchainCommandBufferResourceName, frameInfo.FrameIndex);
+	VulkanGraphicsPipeline& pipeline = m_PipelineHandle->Get();
+	VulkanMaterial& materialResource = m_MaterialHandle->Get();
 	auto* vertexBufferResource = graph.GetResource<BufferResource>(UIVertexBufferResourceName, frameInfo.FrameIndex);
 	auto* indexBufferResource = graph.GetResource<BufferResource>(UIIndexBufferResourceName, frameInfo.FrameIndex);
 
-	auto cmd = cmdResource->Get();
-	auto pipeline = graphicsPipelineResource->Get();
+	VulkanCommandBuffer& cmd = cmdHandle->Get();
 	auto material = materialResource->Get();
 
 	VulkanBuffer* vbo = nullptr;

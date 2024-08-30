@@ -16,14 +16,21 @@ public:
 	{
 	}
 
-	~FenceResource()
+	~FenceResource() override
 	{
 		delete m_Fence;
+		m_Fence = nullptr;
 	}
 
 	VulkanFence& Get() const
 	{
 		return *m_Fence;
+	}
+
+	void Set(VulkanFence* fence)
+	{
+		delete m_Fence;
+		m_Fence = fence;
 	}
 
 	template<typename... Args>

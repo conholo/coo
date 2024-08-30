@@ -30,7 +30,7 @@ private:
 	std::vector<ResourceHandle<TextureResource>> m_ColorAttachmentHandles{};
 	std::vector<ResourceHandle<FramebufferResource>> m_FramebufferHandles{};
 
-	ResourceHandle<GraphicsPipelineObjectResource> m_PipelineHandle{};
+	ResourceHandle<GraphicsPipelineResource> m_PipelineHandle{};
 	ResourceHandle<MaterialLayoutResource> m_MaterialLayoutHandle;
 	ResourceHandle<MaterialResource> m_MaterialHandle;
 	ResourceHandle<ShaderResource> m_FragmentHandle;

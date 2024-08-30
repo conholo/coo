@@ -19,69 +19,65 @@ void SwapchainPass::CreateResources(RenderGraph& graph)
 
 void SwapchainPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 {
-	auto cmd = graph.GetResource<CommandBufferResource>(m_CommandBufferHandles[frameInfo.FrameIndex])->Get();
-	auto* fboResource = graph.GetResource<FramebufferResource>(m_FramebufferHandles[frameInfo.ImageIndex]);
-	auto* rpResource = graph.GetResource<RenderPassObjectResource>(m_RenderPassHandle);
-	auto* resourceFence = graph.GetResource<FenceResource>(m_ResourcesInFlightFenceHandles[frameInfo.FrameIndex]);
+	VulkanCommandBuffer& cmd = m_CommandBufferHandles[frameInfo.FrameIndex]->Get();
+	VulkanFramebuffer& fbo = m_FramebufferHandles[frameInfo.ImageIndex]->Get();
+	VulkanRenderPass& renderPass = m_RenderPassHandle->Get();
+	VulkanFence& fence = m_ResourcesInFlightFenceHandles[frameInfo.FrameIndex]->Get();
 
-	cmd->WaitForCompletion(resourceFence->Get()->GetHandle());
-
-	auto fbo = fboResource->Get();
-	auto renderPass = rpResource->Get();
-
-	cmd->Begin();
+	cmd.WaitForCompletion(fence.GetHandle());
+	cmd.Begin();
 	{
 		VkRenderPassBeginInfo compositionRenderPassInfo{};
 		compositionRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		compositionRenderPassInfo.renderPass = renderPass->GetHandle();
-		compositionRenderPassInfo.framebuffer = fbo->GetHandle();
+		compositionRenderPassInfo.renderPass = renderPass.GetHandle();
+		compositionRenderPassInfo.framebuffer = fbo.GetHandle();
 		compositionRenderPassInfo.renderArea.offset = {0, 0};
-		auto attachmentExtent = VkExtent2D{ fbo->Width(), fbo->Height() };
+		auto attachmentExtent = VkExtent2D{ fbo.Width(), fbo.Height() };
 		compositionRenderPassInfo.renderArea.extent = attachmentExtent;
 
-		renderPass->BeginPass(cmd->GetHandle(), compositionRenderPassInfo, attachmentExtent);
+		renderPass.BeginPass(cmd.GetHandle(), compositionRenderPassInfo, attachmentExtent);
 		{
 			m_UIPass.Record(frameInfo, graph);
 		}
-		renderPass->EndPass(cmd->GetHandle());
+		renderPass.EndPass(cmd.GetHandle());
 	}
-	cmd->End();
+	cmd.End();
 }
 
 void SwapchainPass::Submit(const FrameInfo& frameInfo, RenderGraph& graph)
 {
 	// Submit the command buffer with all subpasses
-	auto cmdBufferResource = graph.GetResource<CommandBufferResource>(m_CommandBufferHandles[frameInfo.FrameIndex]);
-	auto resourceFence = graph.GetResource<FenceResource>(m_ResourcesInFlightFenceHandles[frameInfo.FrameIndex]);
-	auto imageFence = graph.GetResource<FenceResource>(m_ImagesInFlightHandles[frameInfo.ImageIndex]);
+	VulkanCommandBuffer& cmd = m_CommandBufferHandles[frameInfo.FrameIndex]->Get();
+	VulkanFence& resourceFence = m_ResourcesInFlightFenceHandles[frameInfo.FrameIndex]->Get();
+	ResourceHandle<FenceResource> imageInFlightFenceHandle = m_ImagesInFlightHandles[frameInfo.ImageIndex];
 
 	// Make sure the active image is available (i.e. the last command to work on the swapchain image has finished)
-	if(imageFence->Get() != nullptr)
+	if(imageInFlightFenceHandle.Get() != nullptr)
 	{
-		std::vector<VkFence> fences = {imageFence->Get()->GetHandle()};
+		std::vector<VkFence> fences = {imageInFlightFenceHandle->Get().GetHandle() };
 		vkWaitForFences(VulkanContext::Get().Device(), 1, fences.data(), VK_TRUE, std::numeric_limits<int>::max());
 	}
-	// Assign the new fence for the active image to the resource fence for this frame in flight.
-	imageFence->Set(resourceFence->Get());
+	// Assign the new resourceFence for the active image to the resource resourceFence for this frame in flight.
+	imageInFlightFenceHandle->Set(&resourceFence);
 
-	auto swapchainRenderComplete = graph.GetResource<SemaphoreResource>(m_RenderCompleteSemaphoreHandles[frameInfo.FrameIndex]);
-	auto sceneCompRenderComplete = graph.GetResource<SemaphoreResource>(SceneCompositionRenderCompleteSemaphoreResourceName, frameInfo.FrameIndex);
-	std::vector<VkSemaphore> waitSemaphores = {sceneCompRenderComplete->Get()->GetHandle() };
+	VulkanSemaphore& swapchainRenderComplete = m_RenderCompleteSemaphoreHandles[frameInfo.FrameIndex]->Get();
+	VulkanSemaphore& sceneCompRenderComplete = graph.GetGlobalResourceHandle<SemaphoreResource>(SceneCompositionRenderCompleteSemaphoreResourceName, frameInfo.FrameIndex)->Get();
+	std::vector<VkSemaphore> waitSemaphores = { sceneCompRenderComplete.GetHandle() };
 	std::vector<VkPipelineStageFlags> waitStages = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	std::vector<VkSemaphore> signalSemaphores = {swapchainRenderComplete->Get()->GetHandle() };
-	std::vector<VulkanCommandBuffer*> cmdBuffers = { &*cmdBufferResource->Get() };
+	std::vector<VkSemaphore> signalSemaphores = { swapchainRenderComplete.GetHandle() };
+	std::vector<VulkanCommandBuffer*> cmdBuffers = { &cmd };
 
-	auto sceneCompTexResource = graph.GetResource<TextureResource>(SceneCompositionColorAttachmentResourceName, frameInfo.FrameIndex);
-	sceneCompTexResource->Get()->TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	ResourceHandle<TextureResource> sceneCompTexResourceHandle = graph.GetResourceHandle<TextureResource>(SceneCompositionColorAttachmentResourceName, m_uuid, frameInfo.FrameIndex);
+	sceneCompTexResourceHandle->Get().TransitionLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	VulkanCommandBuffer::Submit(
 		VulkanContext::Get().GraphicsQueue(),
 		cmdBuffers,
 		waitSemaphores,
 		waitStages,
 		signalSemaphores,
-		resourceFence->Get()->GetHandle());
+		resourceFence.GetHandle());
 
-	auto swapchainImage = graph.GetResource<Image2DResource>(SwapchainImage2DResourceName, frameInfo.ImageIndex)->Get();
+	auto swapchainImage = graph.GetGlobalResourceHandle<Image2DResource>(SwapchainImage2DResourceName, frameInfo.ImageIndex)->Get();
 	swapchainImage->SetExpectedLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 }
 
@@ -202,9 +198,9 @@ void SwapchainPass::CreateFramebuffers(RenderGraph& graph)
 	auto extent = swapchain.Extent();
 
 	auto createFramebuffer =
-		[&extent, &graph](
+		[&extent, this](
 			size_t index,
-			const std::string& resourceBaseName,
+			const std::string& name,
 			VulkanRenderPass* renderPass,
 			const std::string& swapchainImage2DResourceName)
 	{
@@ -214,13 +210,12 @@ void SwapchainPass::CreateFramebuffers(RenderGraph& graph)
 			image2DResource->Get()->GetView()->GetImageView()
 		};
 
-		auto resourceName = resourceBaseName + " " + std::to_string(index);
 		auto framebuffer = std::make_shared<VulkanFramebuffer>(resourceName);
 		framebuffer->Create(renderPass->GetHandle(), attachments, extent.width, extent.height);
-		return std::make_shared<FramebufferResource>(resourceBaseName, framebuffer);
+		return std::make_unique<FramebufferResource>(resourceBaseName, framebuffer);
 	};
 
-	auto renderPassResource = graph.GetResource(m_RenderPassHandle);
+	VulkanRenderPass& renderPass = graph.GetResource(m_RenderPassHandle);
 
 	m_FramebufferHandles = graph.CreateResources<FramebufferResource>(
 		swapchain.ImageCount(),
