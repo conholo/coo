@@ -20,7 +20,6 @@ public:
 	GBufferPass() = default;
 	~GBufferPass() override = default;
 
-	void DeclareDependencies(const std::initializer_list<std::string>& readResources, const std::initializer_list<std::string>& writeResources) override;
 	void CreateResources(RenderGraph& graph) override;
 	void Record(const FrameInfo& frameInfo, RenderGraph& graph) override;
 	void Submit(const FrameInfo& frameInfo, RenderGraph& graph) override;

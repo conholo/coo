@@ -22,14 +22,11 @@ void UIRenderPass::CreateResources(RenderGraph& graph)
 
 void UIRenderPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 {
-	ResourceHandle<CommandBufferResource> cmdHandle = graph.GetGlobalResourceHandle<CommandBufferResource>(SwapchainCommandBufferResourceName, frameInfo.FrameIndex);
+	VulkanCommandBuffer& cmd = graph.GetGlobalResourceHandle<CommandBufferResource>(SwapchainCommandBufferResourceName, frameInfo.FrameIndex)->Get();
+	ResourceHandle<BufferResource> vertexBufferHandle = graph.GetGlobalResourceHandle<BufferResource>(UIVertexBufferResourceName, frameInfo.FrameIndex);
+	ResourceHandle<BufferResource> indexBufferHandle = graph.GetGlobalResourceHandle<BufferResource>(UIIndexBufferResourceName, frameInfo.FrameIndex);
 	VulkanGraphicsPipeline& pipeline = m_PipelineHandle->Get();
-	VulkanMaterial& materialResource = m_MaterialHandle->Get();
-	auto* vertexBufferResource = graph.GetResource<BufferResource>(UIVertexBufferResourceName, frameInfo.FrameIndex);
-	auto* indexBufferResource = graph.GetResource<BufferResource>(UIIndexBufferResourceName, frameInfo.FrameIndex);
-
-	VulkanCommandBuffer& cmd = cmdHandle->Get();
-	auto material = materialResource->Get();
+	VulkanMaterial& material = m_MaterialHandle->Get();
 
 	VulkanBuffer* vbo = nullptr;
 	VulkanBuffer* ebo = nullptr;
@@ -37,15 +34,15 @@ void UIRenderPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 	ImDrawData* imDrawData = ImGui::GetDrawData();
 	if (imDrawData->CmdListsCount > 0)
 	{
-		vbo = vertexBufferResource->Get().get();
-		ebo = indexBufferResource->Get().get();
+		vbo = &vertexBufferHandle->Get();
+		ebo = &indexBufferHandle->Get();
 	}
 
-	pipeline->Bind(cmd->GetHandle());
+	pipeline.Bind(cmd.GetHandle());
 	m_TransformPushConstants.Scale = glm::vec2(2.0f / ImGui::GetIO().DisplaySize.x, 2.0f / ImGui::GetIO().DisplaySize.y);
 	m_TransformPushConstants.Translate = glm::vec2(-1.0f);
-	material->SetPushConstant<DisplayTransformPushConstants>("p_Transform", m_TransformPushConstants);
-	material->BindPushConstants(cmd->GetHandle());
+	material.SetPushConstant<DisplayTransformPushConstants>("p_Transform", m_TransformPushConstants);
+	material.BindPushConstants(cmd.GetHandle());
 
 	// Render commands
 	if (vbo && ebo)
@@ -55,8 +52,8 @@ void UIRenderPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 
 		VkDeviceSize offsets[1] = { 0 };
 		VkBuffer buffers[] = {vbo->GetBuffer()};
-		vkCmdBindVertexBuffers(cmd->GetHandle(), 0, 1, buffers, offsets);
-		vkCmdBindIndexBuffer(cmd->GetHandle(), ebo->GetBuffer(), 0, VK_INDEX_TYPE_UINT16);
+		vkCmdBindVertexBuffers(cmd.GetHandle(), 0, 1, buffers, offsets);
+		vkCmdBindIndexBuffer(cmd.GetHandle(), ebo->GetBuffer(), 0, VK_INDEX_TYPE_UINT16);
 
 		VkDescriptorSet lastBoundDescriptorSet = VK_NULL_HANDLE;
 
@@ -73,9 +70,9 @@ void UIRenderPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 					if (currentDescriptorSet != lastBoundDescriptorSet)
 					{
 						vkCmdBindDescriptorSets(
-							cmd->GetHandle(),
+							cmd.GetHandle(),
 							VK_PIPELINE_BIND_POINT_GRAPHICS,
-							material->GetPipelineLayout(),
+							material.GetPipelineLayout(),
 							0, 1,
 							&currentDescriptorSet,
 							0,
@@ -90,10 +87,10 @@ void UIRenderPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 				scissorRect.offset.y = std::max((int32_t)(imDrawCmd->ClipRect.y), 0);
 				scissorRect.extent.width = (uint32_t)(imDrawCmd->ClipRect.z - imDrawCmd->ClipRect.x);
 				scissorRect.extent.height = (uint32_t)(imDrawCmd->ClipRect.w - imDrawCmd->ClipRect.y);
-				vkCmdSetScissor(cmd->GetHandle(), 0, 1, &scissorRect);
+				vkCmdSetScissor(cmd.GetHandle(), 0, 1, &scissorRect);
 
 				// Issue the draw command
-				vkCmdDrawIndexed(cmd->GetHandle(), imDrawCmd->ElemCount, 1, indexOffset, vertexOffset, 0);
+				vkCmdDrawIndexed(cmd.GetHandle(), imDrawCmd->ElemCount, 1, indexOffset, vertexOffset, 0);
 				indexOffset += imDrawCmd->ElemCount;
 			}
 			vertexOffset += cmd_list->VtxBuffer.Size;
@@ -104,10 +101,10 @@ void UIRenderPass::Record(const FrameInfo& frameInfo, RenderGraph& graph)
 void UIRenderPass::CreateShaders(RenderGraph& graph)
 {
 	auto createShader =
-		[](const std::string& resourceBaseName, const std::string& filePath, ShaderType shaderType)
+		[](size_t index, const std::string& name, const std::string& filePath, ShaderType shaderType)
 	{
-		auto shader = std::make_shared<VulkanShader>(filePath, shaderType);
-		return std::make_shared<ShaderResource>(resourceBaseName, shader);
+		auto shader = new VulkanShader(filePath, shaderType);
+		return std::make_unique<ShaderResource>(name, shader);
 	};
 
 	auto shaderDirectory = FileSystemUtil::GetShaderDirectory();
@@ -120,45 +117,45 @@ void UIRenderPass::CreateShaders(RenderGraph& graph)
 void UIRenderPass::CreateMaterialLayout(RenderGraph& graph)
 {
 	auto createMaterialLayout =
-		[](const std::string& resourceBaseName, VulkanShader& vertShader, VulkanShader& fragShader)
+		[](size_t index, const std::string& name, VulkanShader& vertShader, VulkanShader& fragShader)
 	{
-		auto materialLayout = std::make_shared<VulkanMaterialLayout>(vertShader, fragShader, resourceBaseName);
-		return std::make_shared<MaterialLayoutResource>(resourceBaseName, materialLayout);
+		auto materialLayout = new VulkanMaterialLayout(vertShader, fragShader, name);
+		return std::make_unique<MaterialLayoutResource>(name, materialLayout);
 	};
 
-	auto vertResource = graph.GetResource<ShaderResource>(m_VertexHandle);
-	auto fragResource = graph.GetResource<ShaderResource>(m_FragmentHandle);
+	ResourceHandle<ShaderResource> vertHandle = graph.GetGlobalResourceHandle<ShaderResource>(m_VertexHandle);
+	ResourceHandle<ShaderResource> fragHandle = graph.GetGlobalResourceHandle<ShaderResource>(m_FragmentHandle);
 
 	m_MaterialLayoutHandle = graph.CreateResource<MaterialLayoutResource>(
 		UIMaterialLayoutResourceName,
 		createMaterialLayout,
-		*vertResource->Get(),
-		*fragResource->Get());
+		vertHandle->Get(),
+		fragHandle->Get());
 }
 
 void UIRenderPass::CreateMaterial(RenderGraph& graph)
 {
 	auto createMaterial =
-		[](const std::string& resourceBaseName, const std::shared_ptr<VulkanMaterialLayout>& materialLayout)
+		[](size_t index, const std::string& name, VulkanMaterialLayout& materialLayout)
 	{
-		auto material = std::make_shared<VulkanMaterial>(materialLayout);
-		return std::make_shared<MaterialResource>(resourceBaseName, material);
+		auto material = new VulkanMaterial(materialLayout);
+		return std::make_unique<MaterialResource>(name, material);
 	};
 
-	auto materialLayoutResource = graph.GetResource<MaterialLayoutResource>(m_MaterialLayoutHandle);
+	VulkanMaterialLayout& layoutRef = m_MaterialLayoutHandle->Get();
 
 	m_MaterialHandle = graph.CreateResource<MaterialResource>(
 		UIMaterialResourceName,
 		createMaterial,
-		materialLayoutResource->Get());
+		layoutRef);
 }
 
 void UIRenderPass::CreateGraphicsPipeline(RenderGraph& graph)
 {
-	auto renderPassResource = graph.GetResource<RenderPassObjectResource>(SwapchainRenderPassResourceName);
-	auto materialLayoutResource = graph.GetResource<MaterialLayoutResource>(m_MaterialLayoutHandle);
-	auto vertShaderResource = graph.GetResource<ShaderResource>(m_VertexHandle);
-	auto fragShaderResource = graph.GetResource<ShaderResource>(m_FragmentHandle);
+	auto renderPassResourceHandle = graph.GetGlobalResourceHandle<RenderPassObjectResource>(SwapchainRenderPassResourceName);
+	auto materialLayoutResourceHandle = graph.GetGlobalResourceHandle<MaterialLayoutResource>(m_MaterialLayoutHandle);
+	auto& vertexShader = m_VertexHandle->Get();
+	auto& fragmentShader = m_FragmentHandle->Get();
 
 	auto createPipeline =
 		[](	const std::string& resourceBaseName,
@@ -210,16 +207,17 @@ void UIRenderPass::CreateGraphicsPipeline(RenderGraph& graph)
 			   .SetLayout(layout->GetPipelineLayout());
 
 		auto pipeline = builder.Build();
-		return std::make_shared<GraphicsPipelineObjectResource>(resourceBaseName, pipeline);
+		auto* rawPtr = pipeline.release();
+		return std::make_unique<GraphicsPipelineResource>(resourceBaseName, rawPtr);
 	};
 
-	m_PipelineHandle = graph.CreateResource<GraphicsPipelineObjectResource>(
+	m_PipelineHandle = graph.CreateResource<GraphicsPipelineResource>(
 		UIGraphicsPipelineResourceName,
 		createPipeline,
-		renderPassResource->Get().get(),
-		materialLayoutResource->Get().get(),
-		vertShaderResource->Get().get(),
-		fragShaderResource->Get().get());
+		&renderPassResourceHandle->Get(),
+		&materialLayoutResourceHandle->Get(),
+		&vertexShader,
+		&fragmentShader);
 }
 
 void UIRenderPass::OnSwapchainResize(uint32_t width, uint32_t height, RenderGraph& graph)

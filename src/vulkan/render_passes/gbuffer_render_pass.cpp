@@ -11,12 +11,6 @@
 #include <core/platform_path.h>
 #include <vulkan/vulkan_utils.h>
 
-void GBufferPass::DeclareDependencies(const std::initializer_list<std::string>& readResources, const std::initializer_list<std::string>& writeResources)
-{
-	m_ReadResources = {readResources};
-	m_WriteResources = {writeResources};
-}
-
 void GBufferPass::CreateResources(RenderGraph& graph)
 {
 	CreateCommandBuffers(graph);
