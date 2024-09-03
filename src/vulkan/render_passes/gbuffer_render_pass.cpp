@@ -434,7 +434,7 @@ void GBufferPass::OnSwapchainResize(uint32_t width, uint32_t height, RenderGraph
 	}
 
 	auto freeFences = [](const std::shared_ptr<VulkanFence>& fence){};
-	graph.TryFreeResources<FenceResource>(GBufferResourcesInFlightResourceName, freeFences);
+	graph.InvalidateResource<FenceResource>(GBufferResourcesInFlightResourceName, freeFences);
 	auto freeSemaphores = [](const std::shared_ptr<VulkanSemaphore>& semaphore){};
 	graph.TryFreeResources<SemaphoreResource>(GBufferRenderCompleteSemaphoreResourceName, freeSemaphores);
 	CreateSynchronizationPrimitives(graph);

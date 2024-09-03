@@ -170,25 +170,134 @@ public:
 		return ResourceHandle<T>(this, resourceIndex);
 	}
 
-	template<typename T>
-	bool HasResource(const std::string& baseName, uint32_t* outCount = nullptr) const
+	void UpdateDependenciesAfterResourceRemoval(const std::string& baseName, size_t resourceIndex)
 	{
-		auto handleIt = m_ResourceHandles.find(baseName);
-		auto countIt = m_ResourceCounts.find(baseName);
-
-		if (handleIt != m_ResourceHandles.end() && countIt != m_ResourceCounts.end())
+		// Iterate through all passes and remove references to the deleted resource
+		for (auto& [passUuid, passResources] : m_ResourceTable)
 		{
-			if (outCount)
-			{
-				*outCount = static_cast<uint32_t>(countIt->second);
-			}
-			return true;
-		}
+			auto& readTable = passResources.ReadTable;
+			auto& writeTable = passResources.WriteTable;
 
-		return false;
+			// Check and remove from read table
+			auto readIt = readTable.find(baseName);
+			if (readIt != readTable.end() && readIt->second.size() > resourceIndex)
+			{
+				readIt->second.erase(readIt->second.begin() + resourceIndex);
+			}
+
+			// Check and remove from write table
+			auto writeIt = writeTable.find(baseName);
+			if (writeIt != writeTable.end() && writeIt->second.size() > resourceIndex)
+			{
+				writeIt->second.erase(writeIt->second.begin() + resourceIndex);
+			}
+		}
 	}
 
-	ResourceTable ZeroInitializeResourceTable(const std::initializer_list<std::string>& declarations)
+	template <typename T>
+	void RemoveResource(ResourceHandle<T> handle)
+	{
+		if (!handle.m_Graph || handle.m_Graph != this)
+		{
+			throw std::runtime_error("Invalid resource handle or handle not associated with this graph.");
+		}
+
+		size_t resourceId = handle();
+		if (resourceId >= m_Resources.size() || !m_Resources[resourceId])
+		{
+			throw std::runtime_error("Invalid resource handle or resource already removed.");
+		}
+
+		// Destroy the underlying Vulkan resource
+		auto resource = dynamic_cast<T*>(m_Resources[resourceId].get());
+		if (resource)
+		{
+			resource->Destroy(); // Handle specific Vulkan resource destruction
+		}
+
+		// Remove the resource from m_Resources
+		m_Resources[resourceId].reset();
+
+		// Find the base name and index corresponding to the handle
+		auto it = std::find_if(m_ResourceHandles.begin(), m_ResourceHandles.end(), [&](const auto& pair) { return pair.second() == resourceId; });
+
+		if (it != m_ResourceHandles.end())
+		{
+			std::string baseName = it->first;
+			size_t count = m_ResourceCounts[baseName];
+
+			// Adjust internal counts and remove handles if necessary
+			if (count == 1)
+			{
+				m_ResourceHandles.erase(it);
+				m_ResourceCounts.erase(baseName);
+			}
+			else
+			{
+				m_ResourceCounts[baseName]--;
+				size_t baseIndex = it->second();
+				size_t resourceIndex = resourceId - baseIndex;
+
+				// Shift remaining resources down if necessary
+				if (resourceIndex < count - 1)
+				{
+					std::move(m_Resources.begin() + resourceId + 1, m_Resources.begin() + baseIndex + count, m_Resources.begin() + resourceId);
+					m_Resources[baseIndex + count - 1].reset();
+				}
+			}
+
+			// Update dependencies after removing resource
+			UpdateDependenciesAfterResourceRemoval(baseName, resourceId - it->second());
+		}
+		else
+		{
+			throw std::runtime_error("Resource handle not found in the resource table.");
+		}
+
+		// Invalidate the handle after removal
+		handle.m_Id = std::numeric_limits<size_t>::max();
+	}
+
+	template <typename T, typename Factory, typename... Args>
+	void InvalidateResource(const std::string& baseName, size_t resourceIndex, Factory&& factory, Args&&... args)
+	{
+		// Ensure the resource exists
+		auto handleIt = m_ResourceHandles.find(baseName);
+		auto countIt = m_ResourceCounts.find(baseName);
+		if (handleIt == m_ResourceHandles.end() || countIt == m_ResourceCounts.end())
+		{
+			throw std::runtime_error("Resource not found: " + baseName);
+		}
+
+		size_t baseIndex = handleIt->second();
+		size_t count = countIt->second;
+
+		// Check if the resourceIndex is within bounds
+		if (resourceIndex >= count)
+		{
+			throw std::runtime_error("Resource index out of bounds for resource: " + baseName);
+		}
+
+		// Compute the actual index in m_Resources
+		size_t actualIndex = baseIndex + resourceIndex;
+		if (actualIndex >= m_Resources.size() || !m_Resources[actualIndex])
+		{
+			throw std::runtime_error("Invalid resource handle or resource already invalidated.");
+		}
+
+		// Destroy the underlying Vulkan resource but keep the logical object
+		auto resource = dynamic_cast<T*>(m_Resources[actualIndex].get());
+		if (resource)
+		{
+			resource->Destroy(); // Specific Vulkan resource destruction
+		}
+
+		// Re-create or reset the resource using the provided factory function
+		auto newResource = factory(resourceIndex, baseName + " " + std::to_string(resourceIndex), std::forward<Args>(args)...);
+		m_Resources[actualIndex] = std::move(newResource);
+	}
+
+	static ResourceTable ZeroInitializeResourceTable(const std::initializer_list<std::string>& declarations)
 	{
 		ResourceTable table;
 		for(auto& declaration: declarations)
@@ -204,7 +313,8 @@ public:
 		uuid passUuid = pass->GetUuid();
 
 		// Initialize the resource tables for the pass
-		m_ResourceTable[passUuid] = {
+		m_ResourceTable[passUuid] =
+		{
 			.ReadTable = ZeroInitializeResourceTable(readResources),
 			.WriteTable = ZeroInitializeResourceTable(writeResources)
 		};
